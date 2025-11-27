@@ -1,3 +1,6 @@
+// Load environment variables
+require('dotenv').config();
+
 const express = require('express');
 const app = express();
 const config = require('./config/server');
@@ -9,6 +12,15 @@ app.use(express.urlencoded({ extended: true }));
 
 // Routes
 app.use('/', routes);
+
+// Error handling middleware
+app.use((err, req, res, next) => {
+  console.error('Error:', err);
+  res.status(err.status || 500).json({
+    success: false,
+    message: err.message || 'Internal server error',
+  });
+});
 
 // Start server
 app.listen(config.port, () => {

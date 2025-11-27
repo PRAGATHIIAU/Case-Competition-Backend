@@ -1,0 +1,52 @@
+const express = require('express');
+const router = express.Router();
+const eventController = require('../controllers/event.controller');
+
+/**
+ * Event Routes
+ * GET /api/events - Get all events
+ * GET /api/events/:id - Get event by ID
+ * POST /api/events - Create a new event
+ * PUT /api/events/:id - Update an event
+ * DELETE /api/events/:id - Delete an event
+ * POST /api/events/:id/register - Register alumni as judge
+ * GET /api/events/:eventId/teams - Get teams with total scores
+ * GET /api/events/:eventId/rubrics - Get rubrics
+ * POST /api/events/:eventId/score - Submit scores
+ * GET /api/events/:eventId/leaderboard - Get leaderboard
+ */
+
+// GET /api/events
+router.get('/', eventController.getAllEvents);
+
+// POST /api/events
+router.post('/', eventController.createEvent);
+
+// Specific routes must come before generic :id route to avoid conflicts
+// GET /api/events/:eventId/teams
+router.get('/:eventId/teams', eventController.getTeams);
+
+// GET /api/events/:eventId/rubrics
+router.get('/:eventId/rubrics', eventController.getRubrics);
+
+// GET /api/events/:eventId/leaderboard
+router.get('/:eventId/leaderboard', eventController.getLeaderboard);
+
+// POST /api/events/:eventId/score
+router.post('/:eventId/score', eventController.submitScores);
+
+// POST /api/events/:id/register
+router.post('/:id/register', eventController.registerAlumniAsJudge);
+
+// Generic routes (must come after specific routes)
+// GET /api/events/:id
+router.get('/:id', eventController.getEventById);
+
+// PUT /api/events/:id
+router.put('/:id', eventController.updateEvent);
+
+// DELETE /api/events/:id
+router.delete('/:id', eventController.deleteEvent);
+
+module.exports = router;
+
