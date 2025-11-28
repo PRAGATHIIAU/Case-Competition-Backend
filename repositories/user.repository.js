@@ -21,20 +21,18 @@ const createUser = async (userData) => {
     mentor_capacity,
     willing_to_be_judge,
     willing_to_be_sponsor,
-    resume_url,
   } = userData;
 
   const query = `
     INSERT INTO ${UserModel.TABLE_NAME} (
       email, name, password, contact,
       willing_to_be_mentor, mentor_capacity,
-      willing_to_be_judge, willing_to_be_sponsor,
-      resume_url
+      willing_to_be_judge, willing_to_be_sponsor
     )
-    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-    RETURNING id, email, name, contact, willing_to_be_mentor, 
-              mentor_capacity, willing_to_be_judge, willing_to_be_sponsor, 
-              resume_url, created_at, updated_at
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+    RETURNING id, email, name, contact, willing_to_be_mentor,
+              mentor_capacity, willing_to_be_judge, willing_to_be_sponsor,
+              created_at, updated_at
   `;
 
   const values = [
@@ -46,7 +44,6 @@ const createUser = async (userData) => {
     mentor_capacity || null,
     willing_to_be_judge === 'yes' || willing_to_be_judge === true,
     willing_to_be_sponsor === 'yes' || willing_to_be_sponsor === true,
-    resume_url || null,
   ];
 
   try {
@@ -72,7 +69,7 @@ const getUserByEmail = async (email) => {
   const query = `
     SELECT id, email, name, password, contact, willing_to_be_mentor,
            mentor_capacity, willing_to_be_judge, willing_to_be_sponsor,
-           resume_url, created_at, updated_at
+           created_at, updated_at
     FROM ${UserModel.TABLE_NAME}
     WHERE email = $1
   `;
@@ -94,7 +91,7 @@ const getUserById = async (id) => {
   const query = `
     SELECT id, email, name, contact, willing_to_be_mentor,
            mentor_capacity, willing_to_be_judge, willing_to_be_sponsor,
-           resume_url, created_at, updated_at
+           created_at, updated_at
     FROM ${UserModel.TABLE_NAME}
     WHERE id = $1
   `;
@@ -121,7 +118,6 @@ const updateUser = async (id, updateData) => {
     mentor_capacity,
     willing_to_be_judge,
     willing_to_be_sponsor,
-    resume_url,
   } = updateData;
 
   // Build dynamic update query
@@ -159,11 +155,6 @@ const updateUser = async (id, updateData) => {
     values.push(willing_to_be_sponsor === 'yes' || willing_to_be_sponsor === true);
   }
 
-  if (resume_url !== undefined) {
-    updates.push(`resume_url = $${paramIndex++}`);
-    values.push(resume_url || null);
-  }
-
   if (updates.length === 0) {
     throw new Error('No fields to update');
   }
@@ -180,7 +171,7 @@ const updateUser = async (id, updateData) => {
     WHERE id = $${paramIndex}
     RETURNING id, email, name, contact, willing_to_be_mentor,
               mentor_capacity, willing_to_be_judge, willing_to_be_sponsor,
-              resume_url, created_at, updated_at
+              created_at, updated_at
   `;
 
   try {
@@ -207,7 +198,7 @@ const updateUserPassword = async (id, hashedPassword) => {
     WHERE id = $2
     RETURNING id, email, name, contact, willing_to_be_mentor,
               mentor_capacity, willing_to_be_judge, willing_to_be_sponsor,
-              resume_url, created_at, updated_at
+              created_at, updated_at
   `;
 
   try {
@@ -216,6 +207,27 @@ const updateUserPassword = async (id, hashedPassword) => {
       return null; // User not found
     }
     return result.rows[0];
+  } catch (error) {
+    throw error;
+  }
+};
+
+/**
+ * Get all users
+ * @returns {Promise<Array>} Array of user objects (without passwords)
+ */
+const getAllUsers = async () => {
+  const query = `
+    SELECT id, email, name, contact, willing_to_be_mentor,
+           mentor_capacity, willing_to_be_judge, willing_to_be_sponsor,
+           created_at, updated_at
+    FROM ${UserModel.TABLE_NAME}
+    ORDER BY created_at DESC
+  `;
+
+  try {
+    const result = await pool.query(query);
+    return result.rows;
   } catch (error) {
     throw error;
   }
@@ -245,6 +257,7 @@ module.exports = {
   createUser,
   getUserByEmail,
   getUserById,
+  getAllUsers,
   updateUser,
   updateUserPassword,
   deleteUser,

@@ -13,10 +13,16 @@ require('dotenv').config();
 const API_GATEWAY_UPLOAD_URL = process.env.API_GATEWAY_UPLOAD_URL;
 
 /**
- * API Gateway URL for DynamoDB operations
- * This endpoint triggers a Lambda function that performs DynamoDB operations
+ * API Gateway URL for DynamoDB operations (Events)
+ * This endpoint triggers a Lambda function that performs DynamoDB operations for Events
  */
 const API_GATEWAY_DYNAMODB_URL = process.env.API_GATEWAY_DYNAMODB_URL;
+
+/**
+ * API Gateway URL for Student Profiles DynamoDB operations
+ * This endpoint triggers a Lambda function that performs DynamoDB operations for Student Profiles
+ */
+const API_GATEWAY_STUDENT_PROFILES_URL = process.env.API_GATEWAY_STUDENT_PROFILES_URL;
 
 /**
  * API Gateway URL for SES email sending (DEPRECATED)
@@ -35,6 +41,16 @@ const S3_BUCKET_NAME = process.env.S3_BUCKET_NAME;
  * DynamoDB table name for Events (used by Lambda, not directly by backend)
  */
 const EVENTS_TABLE_NAME = process.env.EVENTS_TABLE_NAME || 'Events';
+
+/**
+ * DynamoDB table name for Student Profiles (used by Lambda, not directly by backend)
+ */
+const STUDENT_PROFILES_TABLE_NAME = process.env.STUDENT_PROFILES_TABLE_NAME || 'student_profiles';
+
+/**
+ * DynamoDB table name for Alumni Profiles (used by Lambda, not directly by backend)
+ */
+const ALUMNI_PROFILES_TABLE_NAME = process.env.ALUMNI_PROFILES_TABLE_NAME || 'alumni_profiles';
 
 /**
  * Admin email address (recipient for notifications)
@@ -65,9 +81,12 @@ const ALLOWED_EXTENSIONS = ['.pdf', '.doc', '.docx'];
 module.exports = {
   API_GATEWAY_UPLOAD_URL,
   API_GATEWAY_DYNAMODB_URL,
+  API_GATEWAY_STUDENT_PROFILES_URL,
   API_GATEWAY_SES_URL,
   S3_BUCKET_NAME,
   EVENTS_TABLE_NAME,
+  STUDENT_PROFILES_TABLE_NAME,
+  ALUMNI_PROFILES_TABLE_NAME,
   ADMIN_EMAIL,
   FROM_EMAIL,
   ALLOWED_FILE_TYPES,

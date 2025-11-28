@@ -36,9 +36,12 @@ const authenticate = (req, res, next) => {
     const decoded = jwt.verify(token, JWT_SECRET);
     
     // Attach user info to request
+    // Support both userId (alumni) and studentId (students)
     req.user = {
       userId: decoded.userId,
+      studentId: decoded.studentId,
       email: decoded.email,
+      type: decoded.type, // 'student' or undefined (alumni)
     };
 
     next();
@@ -71,10 +74,11 @@ const authenticate = (req, res, next) => {
 /**
  * Middleware to check if user owns the resource
  * Must be used after authenticate middleware
+ * Supports both integer IDs (alumni/users) and UUIDs (students)
  */
 const authorizeOwner = (req, res, next) => {
-  const userId = parseInt(req.params.id || req.params.userId);
-  const authenticatedUserId = req.user?.userId;
+  const resourceId = req.params.id || req.params.userId || req.params.studentId;
+  const authenticatedUserId = req.user?.userId || req.user?.studentId;
 
   if (!authenticatedUserId) {
     return res.status(401).json({
@@ -83,7 +87,12 @@ const authorizeOwner = (req, res, next) => {
     });
   }
 
-  if (userId !== authenticatedUserId) {
+  // Handle both integer IDs and UUIDs (strings)
+  // Convert to string for comparison to handle both cases
+  const resourceIdStr = String(resourceId);
+  const authenticatedIdStr = String(authenticatedUserId);
+
+  if (resourceIdStr !== authenticatedIdStr) {
     return res.status(403).json({
       success: false,
       message: 'Forbidden',
