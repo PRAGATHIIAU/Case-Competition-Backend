@@ -1,0 +1,212 @@
+const bcrypt = require('bcrypt');
+const jwt = require('jsonwebtoken');
+const adminRepository = require('../repositories/admin.repository');
+const eventRepository = require('../repositories/event.repository');
+
+// Try to import student, alumni, and industry user repositories
+// These should exist if CRUD is already implemented
+let studentRepository;
+let alumniRepository;
+let industryUserRepository;
+
+try {
+  studentRepository = require('../repositories/student.repository');
+} catch (error) {
+  console.warn('student.repository.js not found. getAllStudents() will not work until repository is created.');
+}
+
+try {
+  alumniRepository = require('../repositories/alumni.repository');
+} catch (error) {
+  console.warn('alumni.repository.js not found. getAllAlumni() will not work until repository is created.');
+}
+
+try {
+  industryUserRepository = require('../repositories/industryUser.repository');
+} catch (error) {
+  console.warn('industryUser.repository.js not found.');
+}
+
+const SALT_ROUNDS = 10;
+const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
+
+/**
+ * Admin Service
+ * Handles business logic for admin operations
+ * Reuses existing repositories for students, alumni, events, etc.
+ */
+
+/**
+ * Login admin
+ * @param {string} email - Admin email
+ * @param {string} password - Admin password
+ * @returns {Promise<Object>} Admin object and token
+ */
+const login = async (email, password) => {
+  try {
+    // Validate input
+    if (!email || !email.trim()) {
+      throw new Error('Email is required');
+    }
+
+    if (!password) {
+      throw new Error('Password is required');
+    }
+
+    // Get admin by email
+    const admin = await adminRepository.getAdminByEmail(email.trim());
+    if (!admin) {
+      throw new Error('Invalid email or password');
+    }
+
+    // Verify password
+    const isPasswordValid = await bcrypt.compare(password, admin.password_hash);
+    if (!isPasswordValid) {
+      throw new Error('Invalid email or password');
+    }
+
+    // Generate JWT token
+    const token = jwt.sign(
+      { adminId: admin.id, email: admin.email, role: admin.role },
+      JWT_SECRET,
+      { expiresIn: '7d' }
+    );
+
+    // Remove password from response
+    delete admin.password_hash;
+
+    return {
+      admin: {
+        id: admin.id,
+        email: admin.email,
+        first_name: admin.first_name,
+        last_name: admin.last_name,
+        role: admin.role,
+        created_at: admin.created_at,
+        updated_at: admin.updated_at,
+      },
+      token,
+    };
+  } catch (error) {
+    throw error;
+  }
+};
+
+/**
+ * Get admin profile
+ * @param {number} adminId - Admin ID
+ * @returns {Promise<Object>} Admin profile object
+ */
+const getProfile = async (adminId) => {
+  try {
+    const admin = await adminRepository.getAdminById(adminId);
+    if (!admin) {
+      throw new Error('Admin not found');
+    }
+    return admin;
+  } catch (error) {
+    throw error;
+  }
+};
+
+/**
+ * Get all students
+ * Reuses existing studentRepository
+ * @returns {Promise<Array>} Array of student objects
+ */
+const getAllStudents = async () => {
+  try {
+    if (!studentRepository) {
+      throw new Error('Student repository not found. Please create repositories/student.repository.js');
+    }
+
+    // Assume the repository has a getAllStudents method
+    if (typeof studentRepository.getAllStudents === 'function') {
+      return await studentRepository.getAllStudents();
+    } else if (typeof studentRepository.getAll === 'function') {
+      return await studentRepository.getAll();
+    } else {
+      throw new Error('Student repository does not have getAllStudents() or getAll() method');
+    }
+  } catch (error) {
+    throw error;
+  }
+};
+
+/**
+ * Get all alumni
+ * Reuses existing alumniRepository
+ * @returns {Promise<Array>} Array of alumni objects
+ */
+const getAllAlumni = async () => {
+  try {
+    if (!alumniRepository) {
+      throw new Error('Alumni repository not found. Please create repositories/alumni.repository.js');
+    }
+
+    // Assume the repository has a getAllAlumni method
+    if (typeof alumniRepository.getAllAlumni === 'function') {
+      return await alumniRepository.getAllAlumni();
+    } else if (typeof alumniRepository.getAll === 'function') {
+      return await alumniRepository.getAll();
+    } else {
+      throw new Error('Alumni repository does not have getAllAlumni() or getAll() method');
+    }
+  } catch (error) {
+    throw error;
+  }
+};
+
+/**
+ * Get all events
+ * Reuses existing eventRepository
+ * @returns {Promise<Array>} Array of event objects
+ */
+const getAllEvents = async () => {
+  try {
+    return await eventRepository.getAllEvents();
+  } catch (error) {
+    throw error;
+  }
+};
+
+/**
+ * Update event status
+ * Reuses existing eventRepository.updateEvent()
+ * @param {string} eventId - Event ID
+ * @param {string} status - New status
+ * @returns {Promise<Object>} Updated event object
+ */
+const updateEventStatus = async (eventId, status) => {
+  try {
+    if (!eventId || typeof eventId !== 'string' || !eventId.trim()) {
+      throw new Error('Event ID is required and must be a valid string');
+    }
+
+    if (!status || typeof status !== 'string' || !status.trim()) {
+      throw new Error('Status is required and must be a valid string');
+    }
+
+    // Reuse existing updateEvent method
+    const updateData = { status: status.trim() };
+    const updatedEvent = await eventRepository.updateEvent(eventId, updateData);
+
+    if (!updatedEvent) {
+      throw new Error('Event not found');
+    }
+
+    return updatedEvent;
+  } catch (error) {
+    throw error;
+  }
+};
+
+module.exports = {
+  login,
+  getProfile,
+  getAllStudents,
+  getAllAlumni,
+  getAllEvents,
+  updateEventStatus,
+};
+

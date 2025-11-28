@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const eventController = require('../controllers/event.controller');
+const { authenticateAdmin } = require('../middleware/adminAuth');
 
 /**
  * Event Routes
@@ -19,8 +20,8 @@ const eventController = require('../controllers/event.controller');
 // GET /api/events
 router.get('/', eventController.getAllEvents);
 
-// POST /api/events
-router.post('/', eventController.createEvent);
+// POST /api/events (Admin only - requires authentication)
+router.post('/', authenticateAdmin, eventController.createEvent);
 
 // Specific routes must come before generic :id route to avoid conflicts
 // GET /api/events/:eventId/teams
