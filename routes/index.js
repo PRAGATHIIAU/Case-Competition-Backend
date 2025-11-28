@@ -15,10 +15,7 @@ router.use('/api/auth', authRoutes);
 // Event routes
 router.use('/api/events', eventRoutes);
 
-// Student routes
 router.use('/api/students', studentRoutes);
-
-// Admin routes
 router.use('/admin', adminRoutes);
 
 module.exports = router;
