@@ -16,8 +16,11 @@
  * Note: AWS SDK v2 is built into Lambda runtime, no need to install
  */
 
-const AWS = require('aws-sdk');
-const dynamodb = new AWS.DynamoDB.DocumentClient();
+const { DynamoDBClient } = require('@aws-sdk/client-dynamodb');
+const { DynamoDBDocumentClient, GetCommand, PutCommand, UpdateCommand, DeleteCommand, ScanCommand } = require('@aws-sdk/lib-dynamodb');
+
+const client = new DynamoDBClient({});
+const dynamodb = DynamoDBDocumentClient.from(client);
 
 /**
  * Lambda handler function
@@ -53,10 +56,10 @@ exports.handler = async (event) => {
         if (!body.eventId) {
           throw new Error('eventId is required for get operation');
         }
-        result = await dynamodb.get({
+        result = await dynamodb.send(new GetCommand({
           TableName: tableName,
           Key: { eventId: body.eventId }
-        }).promise();
+        }));
         
         return {
           statusCode: 200,
@@ -72,26 +75,22 @@ exports.handler = async (event) => {
         
       case 'getAll':
       case 'scan':
-      case 'GET':
-        // Get all events (if no eventId provided)
-        if (httpMethod === 'GET' && !body.eventId) {
-          const scanResult = await dynamodb.scan({
-            TableName: tableName,
-          }).promise();
-          
-          return {
-            statusCode: 200,
-            headers: {
-              'Content-Type': 'application/json',
-              'Access-Control-Allow-Origin': '*',
-            },
-            body: JSON.stringify({
-              success: true,
-              data: scanResult.Items || [],
-            }),
-          };
-        }
-        break;
+        // Get all events (works with any HTTP method)
+        const scanResult = await dynamodb.send(new ScanCommand({
+          TableName: tableName,
+        }));
+        
+        return {
+          statusCode: 200,
+          headers: {
+            'Content-Type': 'application/json',
+            'Access-Control-Allow-Origin': '*',
+          },
+          body: JSON.stringify({
+            success: true,
+            data: scanResult.Items || [],
+          }),
+        };
         
       case 'create':
       case 'POST':
@@ -133,10 +132,10 @@ exports.handler = async (event) => {
           updatedAt: now,
         };
         
-        await dynamodb.put({
+        await dynamodb.send(new PutCommand({
           TableName: tableName,
           Item: newEvent,
-        }).promise();
+        }));
         
         return {
           statusCode: 201,
@@ -158,10 +157,10 @@ exports.handler = async (event) => {
         }
         
         // Check if event exists
-        const existingEvent = await dynamodb.get({
+        const existingEvent = await dynamodb.send(new GetCommand({
           TableName: tableName,
           Key: { eventId: body.eventId }
-        }).promise();
+        }));
         
         if (!existingEvent.Item) {
           return {
@@ -204,14 +203,14 @@ exports.handler = async (event) => {
           throw new Error('No fields to update');
         }
         
-        const updateResult = await dynamodb.update({
+        const updateResult = await dynamodb.send(new UpdateCommand({
           TableName: tableName,
           Key: { eventId: body.eventId },
           UpdateExpression: `SET ${updateExpressions.join(', ')}`,
           ExpressionAttributeNames: expressionAttributeNames,
           ExpressionAttributeValues: expressionAttributeValues,
           ReturnValues: 'ALL_NEW',
-        }).promise();
+        }));
         
         return {
           statusCode: 200,
@@ -236,10 +235,10 @@ exports.handler = async (event) => {
         }
         
         // Check if event exists
-        const eventForScores = await dynamodb.get({
+        const eventForScores = await dynamodb.send(new GetCommand({
           TableName: tableName,
           Key: { eventId: body.eventId }
-        }).promise();
+        }));
         
         if (!eventForScores.Item) {
           return {
@@ -257,7 +256,7 @@ exports.handler = async (event) => {
         
         // Atomically append new scores to the scores array
         // Using list_append with if_not_exists to handle case where scores array doesn't exist
-        const updateScoresResult = await dynamodb.update({
+        const updateScoresResult = await dynamodb.send(new UpdateCommand({
           TableName: tableName,
           Key: { eventId: body.eventId },
           UpdateExpression: 'SET #scores = list_append(if_not_exists(#scores, :empty_list), :new_scores), #updatedAt = :updatedAt',
@@ -271,7 +270,7 @@ exports.handler = async (event) => {
             ':updatedAt': new Date().toISOString(),
           },
           ReturnValues: 'ALL_NEW',
-        }).promise();
+        }));
         
         return {
           statusCode: 200,
@@ -293,10 +292,10 @@ exports.handler = async (event) => {
         }
         
         // Check if event exists
-        const eventToDelete = await dynamodb.get({
+        const eventToDelete = await dynamodb.send(new GetCommand({
           TableName: tableName,
           Key: { eventId: body.eventId }
-        }).promise();
+        }));
         
         if (!eventToDelete.Item) {
           return {
@@ -312,10 +311,10 @@ exports.handler = async (event) => {
           };
         }
         
-        await dynamodb.delete({
+        await dynamodb.send(new DeleteCommand({
           TableName: tableName,
           Key: { eventId: body.eventId }
-        }).promise();
+        }));
         
         return {
           statusCode: 200,
