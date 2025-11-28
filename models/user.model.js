@@ -18,7 +18,6 @@ const CREATE_TABLE_QUERY = `
     mentor_capacity INTEGER,
     willing_to_be_judge BOOLEAN DEFAULT FALSE,
     willing_to_be_sponsor BOOLEAN DEFAULT FALSE,
-    resume_url TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
   );
@@ -44,7 +43,6 @@ const UserModel = {
     MENTOR_CAPACITY: 'mentor_capacity',
     WILLING_TO_BE_JUDGE: 'willing_to_be_judge',
     WILLING_TO_BE_SPONSOR: 'willing_to_be_sponsor',
-    RESUME_URL: 'resume_url',
     CREATED_AT: 'created_at',
     UPDATED_AT: 'updated_at',
   },

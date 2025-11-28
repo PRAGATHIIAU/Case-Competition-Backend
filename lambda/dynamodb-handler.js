@@ -29,9 +29,6 @@ exports.handler = async (event) => {
   console.log('Received DynamoDB request:', JSON.stringify(event, null, 2));
   
   try {
-    // Get table name from environment variable
-    const tableName = process.env.EVENTS_TABLE_NAME || 'Events';
-    
     // Parse request body
     let body;
     try {
@@ -44,8 +41,231 @@ exports.handler = async (event) => {
     const httpMethod = event.httpMethod || event.requestContext?.http?.method || 'GET';
     const operation = body.operation || httpMethod.toLowerCase();
     
+    // Check if this is an alumni profile operation
+    const isAlumniOperation = operation.includes('AlumniProfile') || operation.includes('alumniProfile');
+    const tableName = isAlumniOperation 
+      ? (process.env.ALUMNI_PROFILES_TABLE_NAME || 'alumni_profiles')
+      : (process.env.EVENTS_TABLE_NAME || 'Events');
+    
     let result;
     
+    // Handle Alumni Profile operations
+    if (isAlumniOperation) {
+      switch (operation) {
+        case 'getAlumniProfile':
+          if (!body.userId) {
+            throw new Error('userId is required for getAlumniProfile operation');
+          }
+          
+          // Ensure userId is a number (DynamoDB requires exact type match)
+          const getUserId = typeof body.userId === 'string' ? parseInt(body.userId, 10) : Number(body.userId);
+          if (isNaN(getUserId)) {
+            throw new Error('userId must be a valid number');
+          }
+          
+          result = await dynamodb.get({
+            TableName: tableName,
+            Key: { userId: getUserId }
+          }).promise();
+          
+          return {
+            statusCode: 200,
+            headers: {
+              'Content-Type': 'application/json',
+              'Access-Control-Allow-Origin': '*',
+            },
+            body: JSON.stringify({
+              success: true,
+              data: result.Item || null,
+            }),
+          };
+          
+        case 'putAlumniProfile':
+          if (!body.userId) {
+            throw new Error('userId is required for putAlumniProfile operation');
+          }
+          
+          if (!body.profileData) {
+            throw new Error('profileData is required for putAlumniProfile operation');
+          }
+          
+          // Ensure userId is a number (DynamoDB requires exact type match)
+          const putUserId = typeof body.userId === 'string' ? parseInt(body.userId, 10) : Number(body.userId);
+          if (isNaN(putUserId)) {
+            throw new Error('userId must be a valid number');
+          }
+          
+          const now = new Date().toISOString();
+          
+          const existingAlumniProfile = await dynamodb.get({
+            TableName: tableName,
+            Key: { userId: putUserId }
+          }).promise();
+          
+          const alumniProfileData = {
+            userId: putUserId,
+            skills: body.profileData.skills || [],
+            aspirations: body.profileData.aspirations || null,
+            parsed_resume: body.profileData.parsed_resume || null,
+            projects: body.profileData.projects || [],
+            experiences: body.profileData.experiences || [],
+            achievements: body.profileData.achievements || [],
+            resume_url: body.profileData.resume_url || null,
+            updatedAt: now,
+          };
+          
+          if (existingAlumniProfile.Item && existingAlumniProfile.Item.createdAt) {
+            alumniProfileData.createdAt = existingAlumniProfile.Item.createdAt;
+          } else {
+            alumniProfileData.createdAt = now;
+          }
+          
+          await dynamodb.put({
+            TableName: tableName,
+            Item: alumniProfileData,
+          }).promise();
+          
+          return {
+            statusCode: 200,
+            headers: {
+              'Content-Type': 'application/json',
+              'Access-Control-Allow-Origin': '*',
+            },
+            body: JSON.stringify({
+              success: true,
+              data: alumniProfileData,
+            }),
+          };
+          
+        case 'updateAlumniProfile':
+          if (!body.userId) {
+            throw new Error('userId is required for updateAlumniProfile operation');
+          }
+          
+          // Ensure userId is a number
+          const updateUserId = typeof body.userId === 'string' ? parseInt(body.userId, 10) : Number(body.userId);
+          if (isNaN(updateUserId)) {
+            throw new Error('userId must be a valid number');
+          }
+          
+          const alumniProfileToUpdate = await dynamodb.get({
+            TableName: tableName,
+            Key: { userId: updateUserId }
+          }).promise();
+          
+          if (!alumniProfileToUpdate.Item) {
+            return {
+              statusCode: 404,
+              headers: {
+                'Content-Type': 'application/json',
+                'Access-Control-Allow-Origin': '*',
+              },
+              body: JSON.stringify({
+                success: false,
+                error: 'Alumni profile not found',
+              }),
+            };
+          }
+          
+          const alumniUpdateExpressions = [];
+          const alumniExpressionAttributeNames = {};
+          const alumniExpressionAttributeValues = {};
+          
+          const alumniUpdateFields = ['skills', 'aspirations', 'parsed_resume', 'projects', 'experiences', 'achievements', 'resume_url'];
+          alumniUpdateFields.forEach((field, index) => {
+            if (body.profileData && body.profileData[field] !== undefined) {
+              const nameKey = `#attr${index}`;
+              const valueKey = `:val${index}`;
+              alumniUpdateExpressions.push(`${nameKey} = ${valueKey}`);
+              alumniExpressionAttributeNames[nameKey] = field;
+              alumniExpressionAttributeValues[valueKey] = body.profileData[field];
+            }
+          });
+          
+          const alumniUpdatedAtKey = `#attr${alumniUpdateExpressions.length}`;
+          const alumniUpdatedAtValue = `:val${alumniUpdateExpressions.length}`;
+          alumniUpdateExpressions.push(`${alumniUpdatedAtKey} = ${alumniUpdatedAtValue}`);
+          alumniExpressionAttributeNames[alumniUpdatedAtKey] = 'updatedAt';
+          alumniExpressionAttributeValues[alumniUpdatedAtValue] = new Date().toISOString();
+          
+          if (alumniUpdateExpressions.length === 0) {
+            throw new Error('No fields to update');
+          }
+          
+          const alumniUpdateResult = await dynamodb.update({
+            TableName: tableName,
+            Key: { userId: updateUserId },
+            UpdateExpression: `SET ${alumniUpdateExpressions.join(', ')}`,
+            ExpressionAttributeNames: alumniExpressionAttributeNames,
+            ExpressionAttributeValues: alumniExpressionAttributeValues,
+            ReturnValues: 'ALL_NEW',
+          }).promise();
+          
+          return {
+            statusCode: 200,
+            headers: {
+              'Content-Type': 'application/json',
+              'Access-Control-Allow-Origin': '*',
+            },
+            body: JSON.stringify({
+              success: true,
+              data: alumniUpdateResult.Attributes,
+            }),
+          };
+          
+        case 'deleteAlumniProfile':
+          if (!body.userId) {
+            throw new Error('userId is required for deleteAlumniProfile operation');
+          }
+          
+          // Ensure userId is a number
+          const deleteUserId = typeof body.userId === 'string' ? parseInt(body.userId, 10) : Number(body.userId);
+          if (isNaN(deleteUserId)) {
+            throw new Error('userId must be a valid number');
+          }
+          
+          const alumniProfileToDelete = await dynamodb.get({
+            TableName: tableName,
+            Key: { userId: deleteUserId }
+          }).promise();
+          
+          if (!alumniProfileToDelete.Item) {
+            return {
+              statusCode: 404,
+              headers: {
+                'Content-Type': 'application/json',
+                'Access-Control-Allow-Origin': '*',
+              },
+              body: JSON.stringify({
+                success: false,
+                error: 'Alumni profile not found',
+              }),
+            };
+          }
+          
+          await dynamodb.delete({
+            TableName: tableName,
+            Key: { userId: deleteUserId }
+          }).promise();
+          
+          return {
+            statusCode: 200,
+            headers: {
+              'Content-Type': 'application/json',
+              'Access-Control-Allow-Origin': '*',
+            },
+            body: JSON.stringify({
+              success: true,
+              message: 'Alumni profile deleted successfully',
+            }),
+          };
+          
+        default:
+          throw new Error(`Unsupported alumni operation: ${operation}`);
+      }
+    }
+    
+    // Handle Events operations (existing code)
     switch (operation) {
       case 'get':
       case 'GET':

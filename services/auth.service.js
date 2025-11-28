@@ -1,7 +1,7 @@
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const axios = require('axios');
-const { API_GATEWAY_UPLOAD_URL } = require('../config/aws');
+const { API_GATEWAY_UPLOAD_URL, API_GATEWAY_DYNAMODB_URL } = require('../config/aws');
 const userRepository = require('../repositories/user.repository');
 
 const SALT_ROUNDS = 10;
@@ -64,10 +64,23 @@ const uploadResumeToS3 = async (fileBuffer, fileName, mimeType) => {
     });
 
     // Lambda returns: { "url": "<s3-url>" }
+    console.log('Upload response received:', {
+      status: response.status,
+      statusText: response.statusText,
+      data: response.data,
+      hasUrl: !!(response.data && response.data.url),
+    });
+    
     if (response.data && response.data.url) {
-      return response.data.url;
+      const s3Url = response.data.url;
+      console.log('✅ S3 URL extracted from response:', s3Url);
+      return s3Url;
     } else {
-      throw new Error('Invalid response from upload service');
+      console.error('❌ Invalid response from upload service:', {
+        responseData: response.data,
+        expectedFormat: '{ "url": "<s3-url>" }',
+      });
+      throw new Error(`Invalid response from upload service. Expected { "url": "<s3-url>" }, got: ${JSON.stringify(response.data)}`);
     }
   } catch (error) {
     console.error('API Gateway upload error:', error);
@@ -132,6 +145,96 @@ const uploadResumeToS3 = async (fileBuffer, fileName, mimeType) => {
 };
 
 /**
+ * Save or update alumni profile in DynamoDB
+ * @param {number} userId - User ID (integer)
+ * @param {Object} profileData - Extended profile data
+ * @returns {Promise<Object>} Saved profile data
+ */
+const saveAlumniProfile = async (userId, profileData) => {
+  if (!API_GATEWAY_DYNAMODB_URL) {
+    throw new Error(
+      'API Gateway DynamoDB URL is not configured. ' +
+      'Please set API_GATEWAY_DYNAMODB_URL in your .env file.'
+    );
+  }
+
+  try {
+    // Ensure userId is sent as a number
+    const numericUserId = typeof userId === 'string' ? parseInt(userId, 10) : Number(userId);
+    
+    const response = await axios.post(API_GATEWAY_DYNAMODB_URL, {
+      operation: 'putAlumniProfile',
+      userId: numericUserId,
+      profileData: profileData,
+    }, {
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      timeout: 30000,
+    });
+
+    if (response.data && response.data.success) {
+      return response.data.data;
+    } else {
+      throw new Error(response.data?.error || 'Failed to save alumni profile');
+    }
+  } catch (error) {
+    console.error('DynamoDB save error:', error);
+    if (error.response) {
+      const errorMessage = typeof error.response.data === 'string' 
+        ? error.response.data 
+        : (error.response.data?.message || error.response.data?.error || 'Failed to save profile');
+      throw new Error(errorMessage);
+    } else if (error.request) {
+      throw new Error('DynamoDB service is unavailable');
+    } else {
+      throw new Error('Failed to save profile: ' + error.message);
+    }
+  }
+};
+
+/**
+ * Get alumni profile from DynamoDB
+ * @param {number} userId - User ID (integer)
+ * @returns {Promise<Object|null>} Profile data or null if not found
+ */
+const getAlumniProfile = async (userId) => {
+  if (!API_GATEWAY_DYNAMODB_URL) {
+    throw new Error(
+      'API Gateway DynamoDB URL is not configured. ' +
+      'Please set API_GATEWAY_DYNAMODB_URL in your .env file.'
+    );
+  }
+
+  try {
+    // Ensure userId is sent as a number
+    const numericUserId = typeof userId === 'string' ? parseInt(userId, 10) : Number(userId);
+    
+    const response = await axios.post(API_GATEWAY_DYNAMODB_URL, {
+      operation: 'getAlumniProfile',
+      userId: numericUserId,
+    }, {
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      timeout: 30000,
+    });
+
+    if (response.data && response.data.success) {
+      return response.data.data;
+    } else {
+      return null;
+    }
+  } catch (error) {
+    console.error('DynamoDB get error:', error);
+    if (error.response && error.response.status === 404) {
+      return null;
+    }
+    throw error;
+  }
+};
+
+/**
  * Validate signup data
  * @param {Object} userData - User signup data
  * @param {Object} file - Uploaded file (optional)
@@ -175,10 +278,10 @@ const validateSignupData = (userData, file) => {
 };
 
 /**
- * Sign up a new user
- * @param {Object} userData - User signup data
+ * Sign up a new user (alumni/industry)
+ * @param {Object} userData - User signup data (includes both RDS and DynamoDB fields)
  * @param {Object} file - Uploaded resume file (optional)
- * @returns {Promise<Object>} Created user object and token
+ * @returns {Promise<Object>} Created user object and token (merged from RDS + DynamoDB)
  */
 const signup = async (userData, file) => {
   try {
@@ -197,31 +300,132 @@ const signup = async (userData, file) => {
     // Upload resume to S3 if provided
     let resumeUrl = null;
     if (file) {
-      resumeUrl = await uploadResumeToS3(file.buffer, file.originalname, file.mimetype);
+      console.log('Resume file received:', {
+        filename: file.originalname,
+        mimetype: file.mimetype,
+        size: file.buffer?.length || 0,
+        hasBuffer: !!file.buffer,
+      });
+      
+      // Check if API Gateway URL is configured
+      if (!API_GATEWAY_UPLOAD_URL) {
+        console.error('❌ API_GATEWAY_UPLOAD_URL is not configured in .env file');
+        console.error('   Please set API_GATEWAY_UPLOAD_URL in your .env file');
+        console.error('   Example: API_GATEWAY_UPLOAD_URL=https://xxxxx.execute-api.region.amazonaws.com/prod/upload');
+      } else {
+        console.log('✅ API_GATEWAY_UPLOAD_URL is configured:', API_GATEWAY_UPLOAD_URL);
+      }
+      
+      try {
+        console.log('Attempting to upload resume to S3 via API Gateway...');
+        resumeUrl = await uploadResumeToS3(file.buffer, file.originalname, file.mimetype);
+        
+        if (resumeUrl) {
+          console.log('✅ Resume uploaded successfully to S3:', resumeUrl);
+        } else {
+          console.error('❌ Upload function returned null/undefined URL');
+        }
+      } catch (uploadError) {
+        console.error('❌ Failed to upload resume to S3:', {
+          error: uploadError.message,
+          stack: uploadError.stack,
+          name: uploadError.name,
+        });
+        // Don't fail signup if resume upload fails, but log the error
+        // resumeUrl will remain null
+      }
+    } else {
+      console.log('No resume file provided in signup request');
     }
 
-    // Prepare user data for database
-    const userDataForDb = {
-      ...userData,
+    // Split data: RDS (atomic data) vs DynamoDB (profile data)
+    const {
+      // RDS fields (atomic data + willingness flags)
+      email,
+      name,
+      contact,
+      willing_to_be_mentor,
+      mentor_capacity,
+      willing_to_be_judge,
+      willing_to_be_sponsor,
+      // DynamoDB fields (profile data)
+      skills,
+      aspirations,
+      parsed_resume,
+      projects,
+      experiences,
+      achievements,
+    } = userData;
+
+    // Prepare RDS data (atomic fields + willingness flags)
+    const rdsData = {
+      email,
+      name,
       password: hashedPassword,
-      resume_url: resumeUrl,
+      contact,
+      willing_to_be_mentor,
+      mentor_capacity,
+      willing_to_be_judge,
+      willing_to_be_sponsor,
     };
 
-    // Create user in database
-    const newUser = await userRepository.createUser(userDataForDb);
+    // Create user in RDS PostgreSQL
+    const newUser = await userRepository.createUser(rdsData);
+
+    // Prepare DynamoDB profile data (if any profile fields provided OR resume uploaded)
+    const hasProfileData = skills || aspirations || parsed_resume || 
+                           projects || experiences || achievements || resumeUrl;
+
+    // Track if profile save was successful
+    let profileSaveSuccess = false;
+
+    if (hasProfileData) {
+      const profileData = {
+        skills: skills !== undefined ? (Array.isArray(skills) ? skills : (typeof skills === 'string' ? JSON.parse(skills) : [])) : [],
+        aspirations: aspirations !== undefined ? (aspirations?.trim() || null) : null,
+        parsed_resume: parsed_resume !== undefined ? (typeof parsed_resume === 'string' ? JSON.parse(parsed_resume) : parsed_resume) : null,
+        projects: projects !== undefined ? (Array.isArray(projects) ? projects : (typeof projects === 'string' ? JSON.parse(projects) : [])) : [],
+        experiences: experiences !== undefined ? (Array.isArray(experiences) ? experiences : (typeof experiences === 'string' ? JSON.parse(experiences) : [])) : [],
+        achievements: achievements !== undefined ? (Array.isArray(achievements) ? achievements : (typeof achievements === 'string' ? JSON.parse(achievements) : [])) : [],
+        resume_url: resumeUrl || null,
+      };
+
+      // Save profile to DynamoDB
+      try {
+        await saveAlumniProfile(newUser.id, profileData);
+        profileSaveSuccess = true;
+        console.log('Profile saved successfully for user:', newUser.id);
+      } catch (profileError) {
+        // Log detailed error but don't fail signup if profile save fails
+        console.error('Failed to save profile during signup:', {
+          error: profileError.message,
+          userId: newUser.id,
+          userIdType: typeof newUser.id,
+          profileDataKeys: Object.keys(profileData),
+          resumeUrl: resumeUrl,
+        });
+        // Continue - profile can be saved later via update endpoint
+      }
+    }
+
+    // Get merged data (RDS + DynamoDB)
+    let mergedUser = await getUserWithProfile(newUser.id);
+    
+    // If resume was uploaded but profile save failed, ensure resume_url is in response
+    if (resumeUrl && !mergedUser.resume_url) {
+      mergedUser.resume_url = resumeUrl;
+      console.warn('Resume URL added to response despite DynamoDB save failure for user:', newUser.id);
+    }
 
     // Generate JWT token
     const token = jwt.sign(
-      { userId: newUser.id, email: newUser.email },
+      { userId: newUser.id, email: newUser.email, type: 'alumni' },
       JWT_SECRET,
       { expiresIn: '7d' }
     );
 
-    // Remove password from response
-    delete newUser.password;
-
     return {
-      user: newUser,
+      user: mergedUser,
       token,
     };
   } catch (error) {
@@ -234,10 +438,67 @@ const signup = async (userData, file) => {
 };
 
 /**
+ * Get user with extended profile (RDS + DynamoDB)
+ * @param {number} userId - User ID (integer)
+ * @returns {Promise<Object>} Merged user data (RDS atomic data + DynamoDB profile data)
+ */
+const getUserWithProfile = async (userId) => {
+  try {
+    // Get basic info from RDS
+    const user = await userRepository.getUserById(userId);
+    if (!user) {
+      throw new Error('User not found');
+    }
+
+    // Get extended profile from DynamoDB
+    const profile = await getAlumniProfile(userId);
+
+    // Merge data: Combine RDS atomic data with DynamoDB profile data
+    if (profile) {
+      return {
+        // RDS atomic data + willingness flags
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        contact: user.contact,
+        willing_to_be_mentor: user.willing_to_be_mentor || false,
+        mentor_capacity: user.mentor_capacity || null,
+        willing_to_be_judge: user.willing_to_be_judge || false,
+        willing_to_be_sponsor: user.willing_to_be_sponsor || false,
+        created_at: user.created_at,
+        updated_at: user.updated_at,
+        // DynamoDB profile data
+        skills: profile.skills || [],
+        aspirations: profile.aspirations || null,
+        parsed_resume: profile.parsed_resume || null,
+        projects: profile.projects || [],
+        experiences: profile.experiences || [],
+        achievements: profile.achievements || [],
+        resume_url: profile.resume_url || null,
+      };
+    } else {
+      // No profile data, return only RDS data with empty profile fields
+      return {
+        ...user,
+        skills: [],
+        aspirations: null,
+        parsed_resume: null,
+        projects: [],
+        experiences: [],
+        achievements: [],
+        resume_url: null,
+      };
+    }
+  } catch (error) {
+    throw error;
+  }
+};
+
+/**
  * Login user
  * @param {string} email - User email
  * @param {string} password - User password
- * @returns {Promise<Object>} User object and token
+ * @returns {Promise<Object>} User object and token (merged from RDS + DynamoDB)
  */
 const login = async (email, password) => {
   try {
@@ -262,18 +523,18 @@ const login = async (email, password) => {
       throw new Error('Invalid email or password');
     }
 
+    // Get merged profile data
+    const mergedUser = await getUserWithProfile(user.id);
+
     // Generate JWT token
     const token = jwt.sign(
-      { userId: user.id, email: user.email },
+      { userId: user.id, email: user.email, type: 'alumni' },
       JWT_SECRET,
       { expiresIn: '7d' }
     );
 
-    // Remove password from response
-    delete user.password;
-
     return {
-      user,
+      user: mergedUser,
       token,
     };
   } catch (error) {
@@ -318,11 +579,11 @@ const validateUpdateData = (updateData, file) => {
 };
 
 /**
- * Update user information
+ * Update user information (RDS + DynamoDB)
  * @param {number} userId - User ID
- * @param {Object} updateData - User update data
+ * @param {Object} updateData - User update data (both RDS and DynamoDB fields)
  * @param {Object} file - Uploaded resume file (optional)
- * @returns {Promise<Object>} Updated user object
+ * @returns {Promise<Object>} Updated user object (merged from RDS + DynamoDB)
  */
 const updateUser = async (userId, updateData, file) => {
   try {
@@ -335,37 +596,110 @@ const updateUser = async (userId, updateData, file) => {
       throw new Error('User not found');
     }
 
-    // Prepare update data
-    const updateDataForDb = { ...updateData };
+    // Split update data: RDS vs DynamoDB
+    const {
+      // RDS fields (atomic data + willingness flags)
+      name,
+      contact,
+      willing_to_be_mentor,
+      mentor_capacity,
+      willing_to_be_judge,
+      willing_to_be_sponsor,
+      password,
+      // DynamoDB fields (profile data)
+      skills,
+      aspirations,
+      parsed_resume,
+      projects,
+      experiences,
+      achievements,
+    } = updateData;
+
+    // Prepare RDS update data
+    const updateDataForDb = {};
+    if (name !== undefined) updateDataForDb.name = name;
+    if (contact !== undefined) updateDataForDb.contact = contact;
+    if (willing_to_be_mentor !== undefined) updateDataForDb.willing_to_be_mentor = willing_to_be_mentor;
+    if (mentor_capacity !== undefined) updateDataForDb.mentor_capacity = mentor_capacity;
+    if (willing_to_be_judge !== undefined) updateDataForDb.willing_to_be_judge = willing_to_be_judge;
+    if (willing_to_be_sponsor !== undefined) updateDataForDb.willing_to_be_sponsor = willing_to_be_sponsor;
 
     // Hash password if provided
-    if (updateData.password) {
-      const hashedPassword = await bcrypt.hash(updateData.password, SALT_ROUNDS);
+    if (password) {
+      const hashedPassword = await bcrypt.hash(password, SALT_ROUNDS);
       await userRepository.updateUserPassword(userId, hashedPassword);
-      delete updateDataForDb.password; // Remove from regular update
     }
 
-    // Upload resume to S3 if provided
-    if (file) {
-      const resumeUrl = await uploadResumeToS3(file.buffer, file.originalname, file.mimetype);
-      updateDataForDb.resume_url = resumeUrl;
+    // Update user in RDS (only if there are RDS fields to update)
+    let updatedUser = existingUser;
+    if (Object.keys(updateDataForDb).length > 0) {
+      updatedUser = await userRepository.updateUser(userId, updateDataForDb);
+      if (!updatedUser) {
+        throw new Error('User not found');
+      }
     }
 
-    // Update user in database
-    const updatedUser = await userRepository.updateUser(userId, updateDataForDb);
+    // Prepare DynamoDB profile update data
+    const hasProfileUpdates = skills !== undefined || aspirations !== undefined || 
+                              parsed_resume !== undefined || projects !== undefined ||
+                              experiences !== undefined || achievements !== undefined || file;
 
-    if (!updatedUser) {
-      throw new Error('User not found');
+    if (hasProfileUpdates) {
+      // Get current profile or create new one
+      const currentProfile = await getAlumniProfile(userId);
+      
+      // Upload resume to S3 if provided
+      let resumeUrl = currentProfile?.resume_url || null;
+      if (file) {
+        resumeUrl = await uploadResumeToS3(file.buffer, file.originalname, file.mimetype);
+      }
+
+      // Merge profile data
+      const profileData = {
+        skills: skills !== undefined ? (Array.isArray(skills) ? skills : JSON.parse(skills)) : (currentProfile?.skills || []),
+        aspirations: aspirations !== undefined ? (aspirations?.trim() || null) : (currentProfile?.aspirations || null),
+        parsed_resume: parsed_resume !== undefined ? (typeof parsed_resume === 'string' ? JSON.parse(parsed_resume) : parsed_resume) : (currentProfile?.parsed_resume || null),
+        projects: projects !== undefined ? (Array.isArray(projects) ? projects : JSON.parse(projects)) : (currentProfile?.projects || []),
+        experiences: experiences !== undefined ? (Array.isArray(experiences) ? experiences : JSON.parse(experiences)) : (currentProfile?.experiences || []),
+        achievements: achievements !== undefined ? (Array.isArray(achievements) ? achievements : JSON.parse(achievements)) : (currentProfile?.achievements || []),
+        resume_url: resumeUrl,
+      };
+
+      // Update profile in DynamoDB
+      await saveAlumniProfile(userId, profileData);
     }
 
-    return updatedUser;
+    // Return merged data
+    return await getUserWithProfile(userId);
   } catch (error) {
     throw error;
   }
 };
 
 /**
- * Delete user
+ * Save or update extended alumni profile
+ * @param {number} userId - User ID
+ * @param {Object} profileData - Extended profile data (skills, aspirations, projects, etc.)
+ * @returns {Promise<Object>} Saved profile data
+ */
+const saveExtendedProfile = async (userId, profileData) => {
+  try {
+    // Verify user exists
+    const user = await userRepository.getUserById(userId);
+    if (!user) {
+      throw new Error('User not found');
+    }
+
+    // Save to DynamoDB (only profile fields, not willingness flags)
+    const savedProfile = await saveAlumniProfile(userId, profileData);
+    return savedProfile;
+  } catch (error) {
+    throw error;
+  }
+};
+
+/**
+ * Delete user from both RDS and DynamoDB
  * @param {number} userId - User ID
  * @returns {Promise<boolean>} True if user was deleted
  */
@@ -377,7 +711,29 @@ const deleteUser = async (userId) => {
       throw new Error('User not found');
     }
 
-    // Delete user from database
+    // Delete profile from DynamoDB first (if exists)
+    try {
+      const profile = await getAlumniProfile(userId);
+      if (profile) {
+        // Delete from DynamoDB via Lambda
+        if (API_GATEWAY_DYNAMODB_URL) {
+          await axios.post(API_GATEWAY_DYNAMODB_URL, {
+            operation: 'deleteAlumniProfile',
+            userId: userId,
+          }, {
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            timeout: 30000,
+          });
+        }
+      }
+    } catch (profileError) {
+      // Log error but continue with RDS deletion
+      console.error('Failed to delete profile from DynamoDB:', profileError);
+    }
+
+    // Delete user from RDS
     const deleted = await userRepository.deleteUser(userId);
 
     if (!deleted) {
@@ -390,11 +746,87 @@ const deleteUser = async (userId) => {
   }
 };
 
+/**
+ * Get all users with merged profiles
+ * @returns {Promise<Array>} Array of user objects (merged from RDS + DynamoDB)
+ */
+const getAllUsers = async () => {
+  try {
+    // Get all users from RDS
+    const users = await userRepository.getAllUsers();
+    
+    // Get profiles from DynamoDB for all users
+    const usersWithProfiles = await Promise.all(
+      users.map(async (user) => {
+        try {
+          const profile = await getAlumniProfile(user.id);
+          return {
+            // RDS atomic data + willingness flags
+            id: user.id,
+            email: user.email,
+            name: user.name,
+            contact: user.contact,
+            willing_to_be_mentor: user.willing_to_be_mentor || false,
+            mentor_capacity: user.mentor_capacity || null,
+            willing_to_be_judge: user.willing_to_be_judge || false,
+            willing_to_be_sponsor: user.willing_to_be_sponsor || false,
+            created_at: user.created_at,
+            updated_at: user.updated_at,
+            // DynamoDB profile data
+            skills: profile?.skills || [],
+            aspirations: profile?.aspirations || null,
+            parsed_resume: profile?.parsed_resume || null,
+            projects: profile?.projects || [],
+            experiences: profile?.experiences || [],
+            achievements: profile?.achievements || [],
+            resume_url: profile?.resume_url || null,
+          };
+        } catch (error) {
+          // If profile fetch fails, return user with empty profile fields
+          console.error(`Failed to get profile for user ${user.id}:`, error);
+          return {
+            ...user,
+            skills: [],
+            aspirations: null,
+            parsed_resume: null,
+            projects: [],
+            experiences: [],
+            achievements: [],
+            resume_url: null,
+          };
+        }
+      })
+    );
+
+    return usersWithProfiles;
+  } catch (error) {
+    throw error;
+  }
+};
+
+/**
+ * Get user by ID (merged from RDS + DynamoDB)
+ * @param {number} userId - User ID
+ * @returns {Promise<Object>} User object (merged from RDS + DynamoDB)
+ */
+const getUserById = async (userId) => {
+  try {
+    return await getUserWithProfile(userId);
+  } catch (error) {
+    throw error;
+  }
+};
+
 module.exports = {
   signup,
   login,
+  getAllUsers,
+  getUserById,
   updateUser,
   deleteUser,
   uploadResumeToS3,
+  getUserWithProfile,
+  saveExtendedProfile,
+  getAlumniProfile,
 };
 
