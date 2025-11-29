@@ -232,10 +232,30 @@ const getStudentProfile = async (studentId) => {
     }
   } catch (error) {
     console.error('DynamoDB get error:', error);
+    
+    // Return null for 404 (profile not found) - this is expected
     if (error.response && error.response.status === 404) {
       return null;
     }
-    throw error;
+    
+    // Return null for 500 (server error) - allow system to continue gracefully
+    // This prevents matching from failing when DynamoDB/Lambda has temporary issues
+    if (error.response && error.response.status === 500) {
+      console.warn(`DynamoDB server error for studentId ${studentId}, returning null profile`);
+      return null;
+    }
+    
+    // For other errors (network, timeout, etc.), also return null to prevent blocking
+    // Only throw for configuration errors (missing URL)
+    if (error.code === 'ECONNREFUSED' || error.code === 'ETIMEDOUT' || error.code === 'ENOTFOUND') {
+      console.warn(`DynamoDB connection error for studentId ${studentId}, returning null profile`);
+      return null;
+    }
+    
+    // Only throw for unexpected errors that indicate a configuration problem
+    // This allows the matching service to continue even if some profiles fail
+    console.warn(`DynamoDB error for studentId ${studentId}, returning null profile:`, error.message);
+    return null;
   }
 };
 

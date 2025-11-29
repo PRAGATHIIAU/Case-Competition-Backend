@@ -53,47 +53,67 @@ const getAllMentors = async () => {
     }
     
     // Get profiles from DynamoDB for all mentors
-    const mentorsWithProfiles = await Promise.all(
+    // Use Promise.allSettled to ensure all mentors are processed even if some profiles fail
+    const profileResults = await Promise.allSettled(
       mentorUsers.map(async (user) => {
         try {
           const profile = await getAlumniProfile(user.id);
           return {
-            // RDS atomic data + willingness flags
-            id: user.id,
-            email: user.email,
-            name: user.name,
-            contact: user.contact,
-            willing_to_be_mentor: user.willing_to_be_mentor || false,
-            mentor_capacity: user.mentor_capacity || null,
-            willing_to_be_judge: user.willing_to_be_judge || false,
-            willing_to_be_sponsor: user.willing_to_be_sponsor || false,
-            created_at: user.created_at,
-            updated_at: user.updated_at,
-            // DynamoDB profile data
-            skills: profile?.skills || [],
-            aspirations: profile?.aspirations || null,
-            parsed_resume: profile?.parsed_resume || null,
-            projects: profile?.projects || [],
-            experiences: profile?.experiences || [],
-            achievements: profile?.achievements || [],
-            resume_url: profile?.resume_url || null,
+            user,
+            profile,
           };
         } catch (error) {
-          // If profile fetch fails, return user with empty profile fields
-          console.error(`Failed to get profile for mentor ${user.id}:`, error);
+          // This should rarely happen now since getAlumniProfile returns null on errors
+          console.warn(`Unexpected error getting profile for mentor ${user.id}:`, error.message);
           return {
-            ...user,
-            skills: [],
-            aspirations: null,
-            parsed_resume: null,
-            projects: [],
-            experiences: [],
-            achievements: [],
-            resume_url: null,
+            user,
+            profile: null,
           };
         }
       })
     );
+    
+    // Process results and build mentor objects
+    const mentorsWithProfiles = profileResults.map((result, index) => {
+      if (result.status === 'fulfilled') {
+        const { user, profile } = result.value;
+        return {
+          // RDS atomic data + willingness flags
+          id: user.id,
+          email: user.email,
+          name: user.name,
+          contact: user.contact,
+          willing_to_be_mentor: user.willing_to_be_mentor || false,
+          mentor_capacity: user.mentor_capacity || null,
+          willing_to_be_judge: user.willing_to_be_judge || false,
+          willing_to_be_sponsor: user.willing_to_be_sponsor || false,
+          created_at: user.created_at,
+          updated_at: user.updated_at,
+          // DynamoDB profile data
+          skills: profile?.skills || [],
+          aspirations: profile?.aspirations || null,
+          parsed_resume: profile?.parsed_resume || null,
+          projects: profile?.projects || [],
+          experiences: profile?.experiences || [],
+          achievements: profile?.achievements || [],
+          resume_url: profile?.resume_url || null,
+        };
+      } else {
+        // If Promise.allSettled result is rejected (shouldn't happen with our error handling)
+        const user = mentorUsers[index];
+        console.warn(`Profile fetch rejected for mentor ${user?.id || 'unknown'}:`, result.reason);
+        return {
+          ...user,
+          skills: [],
+          aspirations: null,
+          parsed_resume: null,
+          projects: [],
+          experiences: [],
+          achievements: [],
+          resume_url: null,
+        };
+      }
+    });
     
     return mentorsWithProfiles;
   } catch (error) {
