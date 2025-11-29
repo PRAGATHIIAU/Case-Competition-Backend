@@ -34,6 +34,28 @@ const signup = async (req, res) => {
     // Get uploaded file from multer
     const file = req.file;
 
+    // Debug: Log received values for willingness flags
+    console.log('[Signup] Received willingness flags:', {
+      willing_to_be_mentor: willing_to_be_mentor,
+      willing_to_be_mentor_type: typeof willing_to_be_mentor,
+      willing_to_be_judge: willing_to_be_judge,
+      willing_to_be_sponsor: willing_to_be_sponsor,
+    });
+
+    // Normalize willingness flags (handle case variations and normalize to lowercase)
+    const normalizeWillingnessFlag = (value) => {
+      if (value === undefined || value === null || value === '') {
+        return 'no';
+      }
+      // Convert to string and lowercase for comparison
+      const strValue = String(value).toLowerCase().trim();
+      // Accept 'yes', 'true', '1', or boolean true
+      if (strValue === 'yes' || strValue === 'true' || strValue === '1' || value === true) {
+        return 'yes';
+      }
+      return 'no';
+    };
+
     // Prepare user data (will be split in service layer)
     const userData = {
       // RDS atomic data + willingness flags
@@ -41,10 +63,13 @@ const signup = async (req, res) => {
       name: name?.trim(),
       password,
       contact: contact?.trim() || null,
-      willing_to_be_mentor: willing_to_be_mentor || 'no',
+      // Normalize willingness flags
+      willing_to_be_mentor: normalizeWillingnessFlag(willing_to_be_mentor),
       mentor_capacity: mentor_capacity ? parseInt(mentor_capacity) : null,
-      willing_to_be_judge: willing_to_be_judge || 'no',
-      willing_to_be_sponsor: willing_to_be_sponsor || 'no',
+      // Normalize other willingness flags
+      willing_to_be_judge: normalizeWillingnessFlag(willing_to_be_judge),
+      willing_to_be_sponsor: normalizeWillingnessFlag(willing_to_be_sponsor),
+      mentor_capacity: mentor_capacity ? parseInt(mentor_capacity) : null,
       // DynamoDB profile data
       skills: skills ? (Array.isArray(skills) ? skills : JSON.parse(skills)) : undefined,
       aspirations: aspirations?.trim() || undefined,
@@ -53,6 +78,9 @@ const signup = async (req, res) => {
       experiences: experiences ? (Array.isArray(experiences) ? experiences : JSON.parse(experiences)) : undefined,
       achievements: achievements ? (Array.isArray(achievements) ? achievements : JSON.parse(achievements)) : undefined,
     };
+
+    // Debug: Log normalized values
+    console.log('[Signup] Normalized userData.willing_to_be_mentor:', userData.willing_to_be_mentor);
 
     // Call service to signup user
     const result = await authService.signup(userData, file);

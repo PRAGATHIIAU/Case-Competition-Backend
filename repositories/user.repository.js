@@ -35,15 +35,27 @@ const createUser = async (userData) => {
               created_at, updated_at
   `;
 
+  // Convert willingness flags to boolean
+  const willingMentor = willing_to_be_mentor === 'yes' || willing_to_be_mentor === true;
+  const willingJudge = willing_to_be_judge === 'yes' || willing_to_be_judge === true;
+  const willingSponsor = willing_to_be_sponsor === 'yes' || willing_to_be_sponsor === true;
+  
+  // Debug logging
+  console.log('[Repository] Converting willingness flags:', {
+    willing_to_be_mentor_input: willing_to_be_mentor,
+    willing_to_be_mentor_type: typeof willing_to_be_mentor,
+    willing_to_be_mentor_boolean: willingMentor,
+  });
+
   const values = [
     email,
     name,
     password, // Already hashed in service layer
     contact || null,
-    willing_to_be_mentor === 'yes' || willing_to_be_mentor === true,
+    willingMentor,
     mentor_capacity || null,
-    willing_to_be_judge === 'yes' || willing_to_be_judge === true,
-    willing_to_be_sponsor === 'yes' || willing_to_be_sponsor === true,
+    willingJudge,
+    willingSponsor,
   ];
 
   try {
@@ -234,6 +246,28 @@ const getAllUsers = async () => {
 };
 
 /**
+ * Get all users willing to be mentors
+ * @returns {Promise<Array>} Array of mentor user objects (without passwords)
+ */
+const getMentorUsers = async () => {
+  const query = `
+    SELECT id, email, name, contact, willing_to_be_mentor,
+           mentor_capacity, willing_to_be_judge, willing_to_be_sponsor,
+           created_at, updated_at
+    FROM ${UserModel.TABLE_NAME}
+    WHERE willing_to_be_mentor = TRUE
+    ORDER BY created_at DESC
+  `;
+
+  try {
+    const result = await pool.query(query);
+    return result.rows;
+  } catch (error) {
+    throw error;
+  }
+};
+
+/**
  * Delete user by ID
  * @param {number} id - User ID
  * @returns {Promise<boolean>} True if user was deleted, false if not found
@@ -258,6 +292,7 @@ module.exports = {
   getUserByEmail,
   getUserById,
   getAllUsers,
+  getMentorUsers,
   updateUser,
   updateUserPassword,
   deleteUser,
