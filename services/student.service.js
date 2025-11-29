@@ -23,7 +23,22 @@ const uploadResumeToS3 = async (fileBuffer, fileName, mimeType) => {
   if (!API_GATEWAY_UPLOAD_URL) {
     throw new Error(
       'API Gateway upload URL is not configured. ' +
-      'Please set API_GATEWAY_UPLOAD_URL in your .env file.'
+      'Please set API_GATEWAY_UPLOAD_URL in your .env file. ' +
+      'Example: API_GATEWAY_UPLOAD_URL=https://xxxxx.execute-api.region.amazonaws.com/prod/upload'
+    );
+  }
+
+  // Validate URL format
+  try {
+    const url = new URL(API_GATEWAY_UPLOAD_URL);
+    if (!url.hostname.includes('execute-api')) {
+      console.warn('⚠️  Warning: API Gateway URL does not appear to be a valid API Gateway endpoint');
+    }
+    console.log(`📤 Uploading resume to API Gateway: ${url.origin}${url.pathname}`);
+  } catch (urlError) {
+    throw new Error(
+      `Invalid API Gateway URL format: ${API_GATEWAY_UPLOAD_URL}. ` +
+      'Expected format: https://xxxxx.execute-api.region.amazonaws.com/stage/upload'
     );
   }
 
@@ -36,6 +51,13 @@ const uploadResumeToS3 = async (fileBuffer, fileName, mimeType) => {
       contentType: mimeType,
     });
 
+    console.log('📋 Upload details:', {
+      fileName,
+      mimeType,
+      fileSize: fileBuffer.length,
+      apiGatewayUrl: API_GATEWAY_UPLOAD_URL,
+    });
+
     const response = await axios.post(API_GATEWAY_UPLOAD_URL, formData, {
       headers: {
         ...formData.getHeaders(),
@@ -45,21 +67,89 @@ const uploadResumeToS3 = async (fileBuffer, fileName, mimeType) => {
       timeout: 30000,
     });
 
+    console.log('📥 Upload response received:', {
+      status: response.status,
+      statusText: response.statusText,
+      hasData: !!response.data,
+      dataKeys: response.data ? Object.keys(response.data) : [],
+    });
+
+    // Lambda returns: { "url": "<s3-url>" }
+    console.log('Upload response received:', {
+      status: response.status,
+      statusText: response.statusText,
+      data: response.data,
+      hasUrl: !!(response.data && response.data.url),
+    });
+    
     if (response.data && response.data.url) {
-      return response.data.url;
+      const s3Url = response.data.url;
+      console.log('✅ S3 URL extracted from response:', s3Url);
+      return s3Url;
     } else {
-      throw new Error('Invalid response from upload service');
+      console.error('❌ Invalid response from upload service:', {
+        responseData: response.data,
+        expectedFormat: '{ "url": "<s3-url>" }',
+      });
+      throw new Error(`Invalid response from upload service. Expected { "url": "<s3-url>" }, got: ${JSON.stringify(response.data)}`);
     }
   } catch (error) {
     console.error('API Gateway upload error:', error);
+    console.error('Error details:', {
+      message: error.message,
+      response: error.response ? {
+        status: error.response.status,
+        statusText: error.response.statusText,
+        data: error.response.data,
+        headers: error.response.headers
+      } : null,
+      request: error.request ? {
+        path: error.config?.url,
+        method: error.config?.method
+      } : null
+    });
+    
+    // Handle axios errors
     if (error.response) {
-      const errorMessage = typeof error.response.data === 'string' 
-        ? error.response.data 
-        : (error.response.data?.message || error.response.data?.error || 'Failed to upload resume');
+      // API Gateway/Lambda returned an error
+      const status = error.response.status;
+      const responseData = error.response.data;
+      
+      // Handle specific API Gateway errors
+      if (status === 403 || status === 404) {
+        // 403/404 from API Gateway usually means "Missing Authentication Token" or wrong endpoint
+        const errorMessage = typeof responseData === 'string' 
+          ? responseData 
+          : (responseData?.message || responseData?.error || responseData?.errorMessage || 'API Gateway error');
+        
+        // Provide helpful diagnostic message
+        if (errorMessage.includes('Missing Authentication Token') || status === 404) {
+          throw new Error(
+            `API Gateway endpoint not found or misconfigured. ` +
+            `Please verify: 1) API Gateway URL is correct (${API_GATEWAY_UPLOAD_URL}), ` +
+            `2) API Gateway is deployed, 3) Method (POST) exists on /upload resource, ` +
+            `4) Authorization is set to "None" in Method Request settings. ` +
+            `Original error: ${errorMessage}`
+          );
+        }
+        
+        throw new Error(errorMessage);
+      }
+      
+      // Other API Gateway/Lambda errors
+      const errorMessage = typeof responseData === 'string' 
+        ? responseData 
+        : (responseData?.message || responseData?.error || responseData?.errorMessage || 'Failed to upload resume');
       throw new Error(errorMessage);
     } else if (error.request) {
-      throw new Error('Upload service is unavailable');
+      // Request was made but no response received
+      throw new Error(
+        `Upload service is unavailable. ` +
+        `Please check: 1) API Gateway URL is correct (${API_GATEWAY_UPLOAD_URL}), ` +
+        `2) API Gateway is deployed and accessible, 3) Network connectivity.`
+      );
     } else {
+      // Error setting up the request
       throw new Error('Failed to upload resume: ' + error.message);
     }
   }
@@ -142,10 +232,30 @@ const getStudentProfile = async (studentId) => {
     }
   } catch (error) {
     console.error('DynamoDB get error:', error);
+    
+    // Return null for 404 (profile not found) - this is expected
     if (error.response && error.response.status === 404) {
       return null;
     }
-    throw error;
+    
+    // Return null for 500 (server error) - allow system to continue gracefully
+    // This prevents matching from failing when DynamoDB/Lambda has temporary issues
+    if (error.response && error.response.status === 500) {
+      console.warn(`DynamoDB server error for studentId ${studentId}, returning null profile`);
+      return null;
+    }
+    
+    // For other errors (network, timeout, etc.), also return null to prevent blocking
+    // Only throw for configuration errors (missing URL)
+    if (error.code === 'ECONNREFUSED' || error.code === 'ETIMEDOUT' || error.code === 'ENOTFOUND') {
+      console.warn(`DynamoDB connection error for studentId ${studentId}, returning null profile`);
+      return null;
+    }
+    
+    // Only throw for unexpected errors that indicate a configuration problem
+    // This allows the matching service to continue even if some profiles fail
+    console.warn(`DynamoDB error for studentId ${studentId}, returning null profile:`, error.message);
+    return null;
   }
 };
 
@@ -216,7 +326,42 @@ const signup = async (studentData, file) => {
     // Upload resume to S3 if provided
     let resumeUrl = null;
     if (file) {
-      resumeUrl = await uploadResumeToS3(file.buffer, file.originalname, file.mimetype);
+      console.log('Resume file received:', {
+        filename: file.originalname,
+        mimetype: file.mimetype,
+        size: file.buffer?.length || 0,
+        hasBuffer: !!file.buffer,
+      });
+      
+      // Check if API Gateway URL is configured
+      if (!API_GATEWAY_UPLOAD_URL) {
+        console.error('❌ API_GATEWAY_UPLOAD_URL is not configured in .env file');
+        console.error('   Please set API_GATEWAY_UPLOAD_URL in your .env file');
+        console.error('   Example: API_GATEWAY_UPLOAD_URL=https://xxxxx.execute-api.region.amazonaws.com/prod/upload');
+      } else {
+        console.log('✅ API_GATEWAY_UPLOAD_URL is configured:', API_GATEWAY_UPLOAD_URL);
+      }
+      
+      try {
+        console.log('Attempting to upload resume to S3 via API Gateway...');
+        resumeUrl = await uploadResumeToS3(file.buffer, file.originalname, file.mimetype);
+        
+        if (resumeUrl) {
+          console.log('✅ Resume uploaded successfully to S3:', resumeUrl);
+        } else {
+          console.error('❌ Upload function returned null/undefined URL');
+        }
+      } catch (uploadError) {
+        console.error('❌ Failed to upload resume to S3:', {
+          error: uploadError.message,
+          stack: uploadError.stack,
+          name: uploadError.name,
+        });
+        // Don't fail signup if resume upload fails, but log the error
+        // resumeUrl will remain null
+      }
+    } else {
+      console.log('No resume file provided in signup request');
     }
 
     // Split data: RDS (atomic data) vs DynamoDB (profile data)

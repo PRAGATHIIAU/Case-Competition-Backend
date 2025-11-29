@@ -20,6 +20,49 @@ const AWS = require('aws-sdk');
 const s3 = new AWS.S3();
 
 /**
+ * Detect file type from file buffer using magic bytes (file signatures)
+ * @param {Buffer} buffer - File buffer
+ * @returns {Object} { mimeType: string, extension: string } or null if unknown
+ */
+const detectFileType = (buffer) => {
+  if (!buffer || buffer.length < 4) {
+    return null;
+  }
+
+  // Get first few bytes
+  const header = buffer.slice(0, 8);
+  const headerHex = header.toString('hex').toUpperCase();
+  const headerStr = buffer.slice(0, 4).toString('utf8');
+
+  // PDF: starts with %PDF
+  if (headerStr.startsWith('%PDF')) {
+    return { mimeType: 'application/pdf', extension: '.pdf' };
+  }
+
+  // DOCX: ZIP file format (starts with PK)
+  if (headerStr.startsWith('PK')) {
+    // Check if it's actually a DOCX (ZIP with specific structure)
+    // DOCX files have [Content_Types].xml in the ZIP
+    const zipHeader = buffer.slice(0, 30).toString('utf8');
+    if (zipHeader.includes('[Content_Types].xml') || zipHeader.includes('word/')) {
+      return { mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', extension: '.docx' };
+    }
+  }
+
+  // DOC: OLE2 format (starts with D0 CF 11 E0 A1 B1 1A E1)
+  if (headerHex.startsWith('D0CF11E0A1B11AE1')) {
+    return { mimeType: 'application/msword', extension: '.doc' };
+  }
+
+  // Alternative DOC detection: check for OLE2 signature at offset 0
+  if (header[0] === 0xD0 && header[1] === 0xCF && header[2] === 0x11 && header[3] === 0xE0) {
+    return { mimeType: 'application/msword', extension: '.doc' };
+  }
+
+  return null;
+};
+
+/**
  * Lambda handler function
  * @param {Object} event - API Gateway event (contains file data)
  * @param {Object} context - Lambda context
@@ -183,6 +226,9 @@ exports.handler = async (event) => {
       throw new Error('File size exceeds 5MB limit');
     }
 
+    // Detect file type from content (magic bytes) as fallback
+    const detectedType = detectFileType(fileBuffer);
+    
     // Validate file type (PDF, DOC, DOCX)
     const allowedTypes = [
       'application/pdf',
@@ -193,20 +239,36 @@ exports.handler = async (event) => {
     
     // Extract file extension safely
     const lastDotIndex = fileName.toLowerCase().lastIndexOf('.');
-    const fileExtension = lastDotIndex > 0 ? fileName.toLowerCase().substring(lastDotIndex) : '';
+    let fileExtension = lastDotIndex > 0 ? fileName.toLowerCase().substring(lastDotIndex) : '';
+    
+    // If no extension found and we detected a type, add the extension
+    if (!fileExtension && detectedType) {
+      fileExtension = detectedType.extension;
+      fileName = fileName + fileExtension;
+      console.log('Added extension based on file content detection:', fileExtension);
+    }
+    
+    // If content-type is generic or missing, use detected type
+    if ((!contentType || contentType === 'application/octet-stream' || contentType.includes('multipart/form-data')) && detectedType) {
+      contentType = detectedType.mimeType;
+      console.log('Updated content-type based on file content detection:', contentType);
+    }
     
     console.log('File extension:', fileExtension);
     console.log('Content-Type:', contentType);
+    console.log('Detected file type:', detectedType);
     
-    // For multipart/form-data, validate by extension only (content-type will be multipart/form-data)
-    // For other content types, check both content-type and extension
+    // Validate file type - check extension, content-type, or detected type
     const isMultipart = (event.headers['content-type'] || event.headers['Content-Type'] || '').includes('multipart/form-data');
+    
+    // For multipart/form-data, we need to validate by extension or detected type
+    // For other content types, check content-type, extension, or detected type
     const isValidType = isMultipart 
-      ? allowedExtensions.includes(fileExtension)  // For multipart, trust extension
-      : (allowedTypes.includes(contentType) || allowedExtensions.includes(fileExtension));
+      ? (allowedExtensions.includes(fileExtension) || (detectedType && allowedTypes.includes(detectedType.mimeType)))
+      : (allowedTypes.includes(contentType) || allowedExtensions.includes(fileExtension) || (detectedType && allowedTypes.includes(detectedType.mimeType)));
     
     if (!isValidType) {
-      throw new Error(`Invalid file type. Only PDF, DOC, and DOCX files are allowed. Received: Content-Type=${contentType}, Extension=${fileExtension}, FileName=${fileName}`);
+      throw new Error(`Invalid file type. Only PDF, DOC, and DOCX files are allowed. Received: Content-Type=${contentType}, Extension=${fileExtension}, FileName=${fileName}, DetectedType=${detectedType ? detectedType.mimeType : 'none'}`);
     }
 
     // Generate unique S3 key
@@ -214,12 +276,15 @@ exports.handler = async (event) => {
     const sanitizedFileName = fileName.replace(/[^a-zA-Z0-9.-]/g, '_');
     const key = `resumes/${timestamp}_${sanitizedFileName}`;
 
+    // Use detected content-type if available, otherwise use provided or default
+    const finalContentType = (detectedType && detectedType.mimeType) || contentType || 'application/octet-stream';
+    
     // Upload to S3
     const uploadParams = {
       Bucket: bucketName,
       Key: key,
       Body: fileBuffer,
-      ContentType: contentType || 'application/octet-stream',
+      ContentType: finalContentType,
       ACL: 'private', // Make files private by default
     };
 
