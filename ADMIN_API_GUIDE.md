@@ -179,6 +179,149 @@ Invoke-RestMethod -Uri "http://localhost:3000/admin/alumni" -Method GET -Headers
 
 ---
 
+## 📊 ADMIN ANALYTICS ENDPOINTS
+
+All analytics endpoints are **admin-only** and require:
+
+```http
+Authorization: Bearer <admin_jwt_token>
+```
+
+### 1. GET /admin/analytics/basic-stats
+**Purpose:** High-level platform statistics for the dashboard.
+
+**Returns (shape):**
+```json
+{
+  "totalStudents": 0,
+  "totalAlumni": 0,
+  "activeEvents": 0,
+  "inactiveAlumniCount": 0
+}
+```
+
+### 2. GET /admin/analytics/student-engagement
+**Purpose:** Student activity + profile completion insights.
+
+**Returns (shape):**
+```json
+{
+  "activeStudents": 0,
+  "inactiveStudents": 0,
+  "avgProfileCompletion": 0
+}
+```
+
+### 3. GET /admin/analytics/alumni-engagement
+**Purpose:** Alumni activity + judging participation.
+
+**Returns (shape):**
+```json
+{
+  "totalAlumni": 0,
+  "activeAlumni": 0,
+  "inactiveAlumni": 0,
+  "judgesThisMonth": 0
+}
+```
+
+### 4. GET /admin/analytics/inactive-alumni
+**Purpose:** List alumni who have **not logged in recently**.
+
+**Returns (shape):**
+```json
+{
+  "inactiveAlumni": [
+    { "id": "string", "name": "string", "email": "string", "lastLogin": "ISO timestamp or null" }
+  ]
+}
+```
+
+### 5. GET /admin/analytics/feedback-summary
+**Purpose:** Summary counts + average ratings for students & employers.
+
+**Returns (shape):**
+```json
+{
+  "studentFeedbackCount": 0,
+  "employerFeedbackCount": 0,
+  "avgStudentRating": 0,
+  "avgEmployerRating": 0
+}
+```
+
+### 6. GET /admin/analytics/events/summary
+**Purpose:** Event-level stats (teams, scores, judges).
+
+**Returns (shape):**
+```json
+[
+  {
+    "eventId": "string",
+    "title": "string",
+    "teamCount": 0,
+    "avgScore": 0,
+    "registeredJudges": 0
+  }
+]
+```
+
+### 7. GET /admin/analytics/student-event-trends
+**Purpose:** How students/teams engage across events.
+
+**Returns (shape):**
+```json
+{
+  "avgTeamsPerEvent": 0,
+  "avgStudentsPerTeam": 0,
+  "mostPopularEvent": {
+    "eventId": "string",
+    "title": "string",
+    "teamCount": 0
+  }
+}
+```
+
+### 8. GET /admin/analytics/alumni-roles
+**Purpose:** Count mentors, judges, sponsors, and multi‑role alumni.
+
+**Returns (shape):**
+```json
+{
+  "mentors": 0,
+  "judges": 0,
+  "sponsors": 0,
+  "multiRole": 0
+}
+```
+
+### 9. GET /admin/analytics/admin-activity
+**Purpose:** Lightweight **placeholder** for recent admin actions (no DB yet).
+
+**Returns (example):**
+```json
+{
+  "recentActions": [
+    { "adminId": "1", "action": "updated event status", "timestamp": "2024-12-01T05:00:00Z" }
+  ]
+}
+```
+
+### 10. GET /admin/analytics/system-health
+**Purpose:** Quick system health check for the admin dashboard.
+
+**Returns (shape):**
+```json
+{
+  "postgresStatus": "UP",
+  "dynamoDBStatus": "UP",
+  "s3Status": "UP",
+  "lambdaStatus": "UP"
+}
+```
+
+---
+
 ## 📅 EVENTS API ENDPOINTS
 
 These endpoints are public (no authentication required) unless specified.

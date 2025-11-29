@@ -18,6 +18,7 @@ const CREATE_TABLE_QUERY = `
     mentor_capacity INTEGER,
     willing_to_be_judge BOOLEAN DEFAULT FALSE,
     willing_to_be_sponsor BOOLEAN DEFAULT FALSE,
+    last_login TIMESTAMP NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
   );
@@ -45,6 +46,7 @@ const UserModel = {
     WILLING_TO_BE_SPONSOR: 'willing_to_be_sponsor',
     CREATED_AT: 'created_at',
     UPDATED_AT: 'updated_at',
+    LAST_LOGIN: 'last_login',
   },
 };
 

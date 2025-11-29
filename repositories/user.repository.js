@@ -69,7 +69,7 @@ const getUserByEmail = async (email) => {
   const query = `
     SELECT id, email, name, password, contact, willing_to_be_mentor,
            mentor_capacity, willing_to_be_judge, willing_to_be_sponsor,
-           created_at, updated_at
+           created_at, updated_at, last_login
     FROM ${UserModel.TABLE_NAME}
     WHERE email = $1
   `;
@@ -253,6 +253,26 @@ const deleteUser = async (id) => {
   }
 };
 
+/**
+ * Update user's last_login timestamp to current time.
+ * @param {number} id - User ID
+ * @returns {Promise<void>}
+ */
+const updateLastLogin = async (id) => {
+  const query = `
+    UPDATE ${UserModel.TABLE_NAME}
+    SET last_login = CURRENT_TIMESTAMP,
+        updated_at = CURRENT_TIMESTAMP
+    WHERE id = $1
+  `;
+
+  try {
+    await pool.query(query, [id]);
+  } catch (error) {
+    throw error;
+  }
+};
+
 module.exports = {
   createUser,
   getUserByEmail,
@@ -261,5 +281,6 @@ module.exports = {
   updateUser,
   updateUserPassword,
   deleteUser,
+   updateLastLogin,
 };
 
