@@ -7,9 +7,9 @@ const { authenticateAdmin } = require('../middleware/adminAuth');
  * Event Routes
  * GET /api/events - Get all events
  * GET /api/events/:id - Get event by ID
- * POST /api/events - Create a new event
- * PUT /api/events/:id - Update an event
- * DELETE /api/events/:id - Delete an event
+ * POST /api/events - Create a new event (Admin only)
+ * PUT /api/events/:id - Update an event (Admin only)
+ * DELETE /api/events/:id - Delete an event (Admin only)
  * POST /api/events/:id/register - Register alumni as judge
  * GET /api/events/:eventId/teams - Get teams with total scores
  * GET /api/events/:eventId/rubrics - Get rubrics
@@ -43,11 +43,11 @@ router.post('/:id/register', eventController.registerAlumniAsJudge);
 // GET /api/events/:id
 router.get('/:id', eventController.getEventById);
 
-// PUT /api/events/:id
-router.put('/:id', eventController.updateEvent);
+// PUT /api/events/:id (Admin only - requires authentication)
+router.put('/:id', authenticateAdmin, eventController.updateEvent);
 
-// DELETE /api/events/:id
-router.delete('/:id', eventController.deleteEvent);
+// DELETE /api/events/:id (Admin only - requires authentication)
+router.delete('/:id', authenticateAdmin, eventController.deleteEvent);
 
 module.exports = router;
 

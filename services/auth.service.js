@@ -526,6 +526,11 @@ const login = async (email, password) => {
     // Get merged profile data
     const mergedUser = await getUserWithProfile(user.id);
 
+    // Update last_login timestamp (fire-and-forget; don't block login on failure)
+    userRepository.updateLastLogin(user.id).catch((err) => {
+      console.warn('Failed to update user last_login:', err.message);
+    });
+
     // Generate JWT token
     const token = jwt.sign(
       { userId: user.id, email: user.email, type: 'alumni' },

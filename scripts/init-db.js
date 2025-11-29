@@ -17,10 +17,32 @@ async function initializeDatabase() {
     // Create users table
     await pool.query(CREATE_USERS_TABLE_QUERY);
     console.log('Users table created.');
+
+    // Ensure last_login column exists on users table (for analytics and tracking)
+    try {
+      await pool.query(`
+        ALTER TABLE users
+        ADD COLUMN IF NOT EXISTS last_login TIMESTAMP NULL
+      `);
+      console.log('Ensured users.last_login column exists.');
+    } catch (alterError) {
+      console.warn('Warning: could not ensure users.last_login column exists:', alterError.message);
+    }
     
     // Create admins table
     await pool.query(CREATE_ADMINS_TABLE_QUERY);
     console.log('Admins table created.');
+
+    // Ensure last_login column exists on students table (for student engagement analytics)
+    try {
+      await pool.query(`
+        ALTER TABLE students
+        ADD COLUMN IF NOT EXISTS last_login TIMESTAMP NULL
+      `);
+      console.log('Ensured students.last_login column exists.');
+    } catch (alterStudentErr) {
+      console.warn('Warning: could not ensure students.last_login column exists:', alterStudentErr.message);
+    }
     
     console.log('Database initialized successfully!');
     

@@ -1,0 +1,220 @@
+[1mdiff --git a/ADMIN_API_GUIDE.md b/ADMIN_API_GUIDE.md[m
+[1mnew file mode 100644[m
+[1mindex 0000000..f3643eb[m
+[1m--- /dev/null[m
+[1m+++ b/ADMIN_API_GUIDE.md[m
+[36m@@ -0,0 +1,773 @@[m
+[32m+[m[32m# Complete Admin & Events API Guide[m
+[32m+[m
+[32m+[m[32mThis document provides a comprehensive guide to all available endpoints, data structures, and operations.[m
+[32m+[m
+[32m+[m[32m---[m
+[32m+[m
+[32m+[m[32m## 🔐 ADMIN ENDPOINTS[m
+[32m+[m
+[32m+[m[32mAll admin endpoints (except login) require authentication via JWT token in the Authorization header:[m
+[32m+[m[32m```[m
+[32m+[m[32mAuthorization: Bearer <your_jwt_token>[m
+[32m+[m[32m```[m
+[32m+[m
+[32m+[m[32m### 1. POST /admin/login[m
+[32m+[m[32m**Purpose:** Authenticate as admin and get JWT token[m
+[32m+[m
+[32m+[m[32m**Request:**[m
+[32m+[m[32m```json[m
+[32m+[m[32m{[m
+[32m+[m[32m  "email": "admin@test.com",[m
+[32m+[m[32m  "password": "admin123"[m
+[32m+[m[32m}[m
+[32m+[m[32m```[m
+[32m+[m
+[32m+[m[32m**Response:**[m
+[32m+[m[32m```json[m
+[32m+[m[32m{[m
+[32m+[m[32m  "success": true,[m
+[32m+[m[32m  "message": "Login successful",[m
+[32m+[m[32m  "data": {[m
+[32m+[m[32m    "admin": {[m
+[32m+[m[32m      "id": 1,[m
+[32m+[m[32m      "email": "admin@test.com",[m
+[32m+[m[32m      "first_name": "Admin",[m
+[32m+[m[32m      "last_name": "User",[m
+[32m+[m[32m      "role": "admin",[m
+[32m+[m[32m      "created_at": "2024-01-01T00:00:00.000Z",[m
+[32m+[m[32m      "updated_at": "2024-01-01T00:00:00.000Z"[m
+[32m+[m[32m    },[m
+[32m+[m[32m    "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."[m
+[32m+[m[32m  }[m
+[32m+[m[32m}[m
+[32m+[m[32m```[m
+[32m+[m
+[32m+[m[32m**PowerShell:**[m
+[32m+[m[32m```powershell[m
+[32m+[m[32m$body = @{ email = "admin@test.com"; password = "admin123" } | ConvertTo-Json[m
+[32m+[m[32m$response = Invoke-RestMethod -Uri "http://localhost:3000/admin/login" -Method POST -Body $body -ContentType "application/json"[m
+[32m+[m[32m$token = $response.data.token[m
+[32m+[m[32m```[m
+[32m+[m
+[32m+[m[32m---[m
+[32m+[m
+[32m+[m[32m### 2. GET /admin/profile[m
+[32m+[m[32m**Purpose:** Get admin profile information[m
+[32m+[m
+[32m+[m[32m**Headers:** `Authorization: Bearer <token>`[m
+[32m+[m
+[32m+[m[32m**Response:**[m
+[32m+[m[32m```json[m
+[32m+[m[32m{[m
+[32m+[m[32m  "success": true,[m
+[32m+[m[32m  "message": "Profile retrieved successfully",[m
+[32m+[m[32m  "data": {[m
+[32m+[m[32m    "id": 1,[m
+[32m+[m[32m    "email": "admin@test.com",[m
+[32m+[m[32m    "first_name": "Admin",[m
+[32m+[m[32m    "last_name": "User",[m
+[32m+[m[32m    "role": "admin",[m
+[32m+[m[32m    "created_at": "2024-01-01T00:00:00.000Z",[m
+[32m+[m[32m    "updated_at": "2024-01-01T00:00:00.000Z"[m
+[32m+[m[32m  }[m
+[32m+[m[32m}[m
+[32m+[m[32m```[m
+[32m+[m
+[32m+[m[32m**PowerShell:**[m
+[32m+[m[32m```powershell[m
+[32m+[m[32m$headers = @{ Authorization = "Bearer $token" }[m
+[32m+[m[32mInvoke-RestMethod -Uri "http://localhost:3000/admin/profile" -Method GET -Headers $headers | ConvertTo-Json[m
+[32m+[m[32m```[m
+[32m+[m
+[32m+[m[32m---[m
+[32m+[m
+[32m+[m[32m### 3. GET /admin/events[m
+[32m+[m[32m**Purpose:** Get all events (admin view)[m
+[32m+[m
+[32m+[m[32m**Headers:** `Authorization: Bearer <token>`[m
+[32m+[m
+[32m+[m[32m**Response:**[m
+[32m+[m[32m```json[m
+[32m+[m[32m{[m
+[32m+[m[32m  "success": true,[m
+[32m+[m[32m  "message": "Events retrieved successfully",[m
+[32m+[m[32m  "data": [[m
+[32m+[m[32m    {[m
+[32m+[m[32m      "eventId": "EVT-1234567890-abc123",[m
+[32m+[m[32m      "eventInfo": {[m
+[32m+[m[32m        "name": "Case Competition 2024",[m
+[32m+[m[32m        "description": "Annual case competition event",[m
+[32m+[m[32m        "date": "2024-04-15T09:00:00Z"[m
+[32m+[m[32m      },[m
+[32m+[m[32m      "teams": [],[m
+[32m+[m[32m      "rubrics": [],[m
+[32m+[m[32m      "judges": [],[m
+[32m+[m[32m      "scores": [],[m
+[32m+[m[32m      "createdAt": "2024-01-01T00:00:00.000Z",[m
+[32m+[m[32m      "updatedAt": "2024-01-01T00:00:00.000Z"[m
+[32m+[m[32m    }[m
+[32m+[m[32m  ],[m
+[32m+[m[32m  "count": 1[m
+[32m+[m[32m}[m
+[32m+[m[32m```[m
+[32m+[m
+[32m+[m[32m**PowerShell:**[m
+[32m+[m[32m```powershell[m
+[32m+[m[32mInvoke-RestMethod -Uri "http://localhost:3000/admin/events" -Method GET -Headers $headers | ConvertTo-Json[m
+[32m+[m[32m```[m
+[32m+[m
+[32m+[m[32m---[m
+[32m+[m
+[32m+[m[32m### 4. PUT /admin/events/:id/status[m
+[32m+[m[32m**Purpose:** Update event status (e.g., "approved", "pending", "cancelled")[m
+[32m+[m
+[32m+[m[32m**Headers:** `Authorization: Bearer <token>`[m
+[32m+[m
+[32m+[m[32m**Request:**[m
+[32m+[m[32m```json[m
+[32m+[m[32m{[m
+[32m+[m[32m  "status": "approved"[m
+[32m+[m[32m}[m
+[32m+[m[32m```[m
+[32m+[m
+[32m+[m[32m**Response:**[m
+[32m+[m[32m```json[m
+[32m+[m[32m{[m
+[32m+[m[32m  "success": true,[m
+[32m+[m[32m  "message": "Event status updated successfully",[m
+[32m+[m[32m  "data": {[m
+[32m+[m[32m    "eventId": "EVT-1234567890-abc123",[m
+[32m+[m[32m    "status": "approved",[m
+[32m+[m[32m    "updatedAt": "2024-01-02T00:00:00.000Z"[m
+[32m+[m[32m  }[m
+[32m+[m[32m}[m
+[32m+[m[32m```[m
+[32m+[m
+[32m+[m[32m**PowerShell:**[m
+[32m+[m[32m```powershell[m
+[32m+[m[32m$updateBody = @{ status = "approved" } | ConvertTo-Json[m
+[32m+[m[32mInvoke-RestMethod -Uri "http://localhost:3000/admin/events/EVT-1234567890-abc123/status" -Method PUT -Headers $headers -Body $updateBody | ConvertTo-Json[m
+[32m+[m[32m```[m
+[32m+[m
+[32m+[m[32m---[m
+[32m+[m
+[32m+[m[32m### 5. GET /admin/students[m
+[32m+[m[32m**Purpose:** Get all students (requires studentRepository)[m
+[32m+[m
+[32m+[m[32m**Headers:** `Authorization: Bearer <token>`[m
+[32m+[m
+[32m+[m[32m**Status:** ⚠️ Needs `repositories/student.repository.js` with `getAllStudents()` method[m
+[32m+[m
+[32m+[m[32m**PowerShell:**[m
+[32m+[m[32m```powershell[m
+[32m+[m[32mInvoke-RestMethod -Uri "http://localhost:3000/admin/students" -Method GET -Headers $headers | ConvertTo-Json[m
+[32m+[m[32m```[m
+[32m+[m
+[32m+[m[32m---[m
+[32m+[m
+[32m+[m[32m### 6. GET /admin/alumni[m
+[32m+[m[32m**Purpose:** Get all alumni (requires alumniRepository)[m
+[32m+[m
+[32m+[m[32m**Headers:** `Authorization: Bearer <token>`[m
+[32m+[m
+[32m+[m[32m**Status:** ⚠️ Needs `repositories/alumni.repository.js` with `getAllAlumni()` method[m
+[32m+[m
+[32m+[m[32m**PowerShell:**[m
+[32m+[m[32m```powershell[m
+[32m+[m[32mInvoke-RestMethod -Uri "http://localhost:3000/admin/alumni" -Method GET -Headers $headers | ConvertTo-Json[m
+[32m+[m[32m```[m
+[32m+[m
+[32m+[m[32m---[m
+[32m+[m
+[32m+[m[32m## 📅 EVENTS API ENDPOINTS[m
+[32m+[m
+[32m+[m[32mThese endpoints are public (no authentication required) unless specified.[m
+[32m+[m
+[32m+[m[32m### 1. GET /api/events[m
+[32m+[m[32m**Purpose:** Get all events[m
+[32m+[m
+[32m+[m[32m**Response:**[m
+[32m+[m[32m```json[m
+[32m+[m[32m{[m
+[32m+[m[32m  "success": true,[m
+[32m+[m[32m  "message": "Events retrieved successfully",[m
+[32m+[m[32m  "data": [[m
+[32m+[m[32m    {[m
+[32m+[m[32m      "eventId": "EVT-1234567890-abc123",[m
+[32m+[m[32m      "eventInfo": {[m
+[32m+[m[32m        "name": "Case Competition 2024",[m
+[32m+[m[32m        "description": "Annual case competition event",[m
+[32m+[m[32m        "date": "2024-04-15T09:00:00Z"[m
+[32m+[m[32m      },[m
+[32m+[m[32m      "teams": [],[m
+[32m+[m[32m      "rubrics": [],[m
+[32m+[m[32m      "judges": [],[m
+[32m+[m[32m      "scores": [],[m
+[32m+[m[32m      "createdAt": "2024-01-01T00:00:00.000Z",[m
+[32m+[m[32m      "updatedAt": "2024-01-01T00:00:00.000Z"[m
+[32m+[m[32m    }[m
+[32m+[m[32m  ],[m
+[32m+[m[32m  "count": 1[m
+[32m+[m[32m}[m
+[32m+[m[32m```[m
+[32m+[m
+[32m+[m[32m**
