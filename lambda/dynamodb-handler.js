@@ -445,13 +445,13 @@ exports.handler = async (event) => {
         };
         
       case 'updateScores':
-        // Atomically append new scores to event.scores array
+        // Replace the entire scores array (updates existing scores or adds new ones)
         if (!body.eventId) {
           throw new Error('eventId is required for updateScores operation');
         }
         
-        if (!body.newScores || !Array.isArray(body.newScores) || body.newScores.length === 0) {
-          throw new Error('newScores must be a non-empty array');
+        if (!body.scores || !Array.isArray(body.scores)) {
+          throw new Error('scores must be an array');
         }
         
         // Check if event exists
@@ -474,19 +474,17 @@ exports.handler = async (event) => {
           };
         }
         
-        // Atomically append new scores to the scores array
-        // Using list_append with if_not_exists to handle case where scores array doesn't exist
+        // Replace the entire scores array (allows updating existing scores)
         const updateScoresResult = await dynamodb.send(new UpdateCommand({
           TableName: tableName,
           Key: { eventId: body.eventId },
-          UpdateExpression: 'SET #scores = list_append(if_not_exists(#scores, :empty_list), :new_scores), #updatedAt = :updatedAt',
+          UpdateExpression: 'SET #scores = :scores, #updatedAt = :updatedAt',
           ExpressionAttributeNames: {
             '#scores': 'scores',
             '#updatedAt': 'updatedAt',
           },
           ExpressionAttributeValues: {
-            ':new_scores': body.newScores,
-            ':empty_list': [],
+            ':scores': body.scores,
             ':updatedAt': new Date().toISOString(),
           },
           ReturnValues: 'ALL_NEW',

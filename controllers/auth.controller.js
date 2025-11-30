@@ -10,6 +10,7 @@ const authService = require('../services/auth.service');
  * Register a new user
  */
 const signup = async (req, res) => {
+  console.log('-> triggered endpoint POST /api/auth/signup');
   try {
     // Extract form data (both RDS atomic data and DynamoDB profile data)
     const {
@@ -86,6 +87,7 @@ const signup = async (req, res) => {
     const result = await authService.signup(userData, file);
 
     // Return success response
+    console.log('-> finished endpoint execution POST /api/auth/signup');
     res.status(201).json({
       success: true,
       message: 'User registered successfully',
@@ -94,6 +96,7 @@ const signup = async (req, res) => {
   } catch (error) {
     // Handle specific error types
     if (error.message === 'Email already exists') {
+      console.log('-> finished endpoint execution POST /api/auth/signup');
       return res.status(409).json({
         success: false,
         message: 'Email already exists',
@@ -102,6 +105,7 @@ const signup = async (req, res) => {
     }
 
     if (error.message.includes('Invalid file type')) {
+      console.log('-> finished endpoint execution POST /api/auth/signup');
       return res.status(400).json({
         success: false,
         message: 'Invalid file type',
@@ -110,6 +114,7 @@ const signup = async (req, res) => {
     }
 
     if (error.message.includes('mentor_capacity')) {
+      console.log('-> finished endpoint execution POST /api/auth/signup');
       return res.status(400).json({
         success: false,
         message: 'Validation error',
@@ -119,6 +124,7 @@ const signup = async (req, res) => {
 
     // Generic error response
     console.error('Signup error:', error);
+    console.log('-> finished endpoint execution POST /api/auth/signup');
     res.status(400).json({
       success: false,
       message: 'Failed to register user',
@@ -132,11 +138,13 @@ const signup = async (req, res) => {
  * Authenticate user and return token
  */
 const login = async (req, res) => {
+  console.log('-> triggered endpoint POST /api/auth/login');
   try {
     const { email, password } = req.body;
 
     // Validate input
     if (!email || !password) {
+      console.log('-> finished endpoint execution POST /api/auth/login');
       return res.status(400).json({
         success: false,
         message: 'Email and password are required',
@@ -147,6 +155,7 @@ const login = async (req, res) => {
     const result = await authService.login(email.trim(), password);
 
     // Return success response
+    console.log('-> finished endpoint execution POST /api/auth/login');
     res.status(200).json({
       success: true,
       message: 'Login successful',
@@ -155,6 +164,7 @@ const login = async (req, res) => {
   } catch (error) {
     // Handle authentication errors
     if (error.message === 'Invalid email or password' || error.message === 'Email is required' || error.message === 'Password is required') {
+      console.log('-> finished endpoint execution POST /api/auth/login');
       return res.status(401).json({
         success: false,
         message: 'Invalid email or password',
@@ -164,6 +174,7 @@ const login = async (req, res) => {
 
     // Generic error response
     console.error('Login error:', error);
+    console.log('-> finished endpoint execution POST /api/auth/login');
     res.status(500).json({
       success: false,
       message: 'Failed to login',
@@ -177,6 +188,7 @@ const login = async (req, res) => {
  * Update user information (RDS atomic fields only)
  */
 const updateUser = async (req, res) => {
+  console.log(`-> triggered endpoint PUT /api/auth/user/:id`);
   try {
     const userId = parseInt(req.params.id);
     const {
@@ -222,6 +234,7 @@ const updateUser = async (req, res) => {
     const updatedUser = await authService.updateUser(userId, updateData, file);
 
     // Return success response
+    console.log('-> finished endpoint execution PUT /api/auth/user/:id');
     res.status(200).json({
       success: true,
       message: 'User updated successfully',
@@ -230,6 +243,7 @@ const updateUser = async (req, res) => {
   } catch (error) {
     // Handle specific error types
     if (error.message === 'User not found') {
+      console.log('-> finished endpoint execution PUT /api/auth/user/:id');
       return res.status(404).json({
         success: false,
         message: 'User not found',
@@ -238,6 +252,7 @@ const updateUser = async (req, res) => {
     }
 
     if (error.message.includes('Invalid file type')) {
+      console.log('-> finished endpoint execution PUT /api/auth/user/:id');
       return res.status(400).json({
         success: false,
         message: 'Invalid file type',
@@ -246,6 +261,7 @@ const updateUser = async (req, res) => {
     }
 
     if (error.message.includes('mentor_capacity') || error.message.includes('Password must be')) {
+      console.log('-> finished endpoint execution PUT /api/auth/user/:id');
       return res.status(400).json({
         success: false,
         message: 'Validation error',
@@ -254,6 +270,7 @@ const updateUser = async (req, res) => {
     }
 
     // Generic error response
+    console.log('-> finished endpoint execution PUT /api/auth/user/:id');
     console.error('Update user error:', error);
     res.status(400).json({
       success: false,
@@ -268,15 +285,18 @@ const updateUser = async (req, res) => {
  * Get all users with merged profiles
  */
 const getAllUsers = async (req, res) => {
+  console.log('-> triggered endpoint GET /api/auth/users');
   try {
     const users = await authService.getAllUsers();
 
+    console.log('-> finished endpoint execution GET /api/auth/users');
     res.status(200).json({
       success: true,
       message: 'Users retrieved successfully',
       data: users,
     });
   } catch (error) {
+    console.log('-> finished endpoint execution GET /api/auth/users');
     console.error('Get all users error:', error);
     res.status(500).json({
       success: false,
@@ -291,11 +311,13 @@ const getAllUsers = async (req, res) => {
  * Get one user's complete info (RDS + DynamoDB merged)
  */
 const getUserById = async (req, res) => {
+  console.log(`-> triggered endpoint GET /api/auth/user/:id`);
   try {
     const userId = parseInt(req.params.id);
 
     const user = await authService.getUserById(userId);
 
+    console.log('-> finished endpoint execution GET /api/auth/user/:id');
     res.status(200).json({
       success: true,
       message: 'User retrieved successfully',
@@ -303,6 +325,7 @@ const getUserById = async (req, res) => {
     });
   } catch (error) {
     if (error.message === 'User not found') {
+      console.log('-> finished endpoint execution GET /api/auth/user/:id');
       return res.status(404).json({
         success: false,
         message: 'User not found',
@@ -310,6 +333,7 @@ const getUserById = async (req, res) => {
       });
     }
 
+    console.log('-> finished endpoint execution GET /api/auth/user/:id');
     console.error('Get user error:', error);
     res.status(500).json({
       success: false,
@@ -324,6 +348,7 @@ const getUserById = async (req, res) => {
  * Delete user account from both RDS and DynamoDB
  */
 const deleteUser = async (req, res) => {
+  console.log(`-> triggered endpoint DELETE /api/auth/user/:id`);
   try {
     const userId = parseInt(req.params.id);
 
@@ -331,6 +356,7 @@ const deleteUser = async (req, res) => {
     await authService.deleteUser(userId);
 
     // Return success response
+    console.log('-> finished endpoint execution DELETE /api/auth/user/:id');
     res.status(200).json({
       success: true,
       message: 'User deleted successfully',
@@ -338,6 +364,7 @@ const deleteUser = async (req, res) => {
   } catch (error) {
     // Handle specific error types
     if (error.message === 'User not found') {
+      console.log('-> finished endpoint execution DELETE /api/auth/user/:id');
       return res.status(404).json({
         success: false,
         message: 'User not found',
@@ -346,6 +373,7 @@ const deleteUser = async (req, res) => {
     }
 
     // Generic error response
+    console.log('-> finished endpoint execution DELETE /api/auth/user/:id');
     console.error('Delete user error:', error);
     res.status(500).json({
       success: false,
@@ -360,6 +388,7 @@ const deleteUser = async (req, res) => {
  * Save or update extended alumni profile in DynamoDB
  */
 const saveExtendedProfile = async (req, res) => {
+  console.log(`-> triggered endpoint POST /api/auth/user/:id/profile`);
   try {
     const userId = parseInt(req.params.id);
     const {
@@ -395,6 +424,7 @@ const saveExtendedProfile = async (req, res) => {
     // Save profile to DynamoDB
     const savedProfile = await authService.saveExtendedProfile(userId, profileData);
 
+    console.log('-> finished endpoint execution POST /api/auth/user/:id/profile');
     res.status(200).json({
       success: true,
       message: 'Alumni profile saved successfully',
@@ -402,6 +432,7 @@ const saveExtendedProfile = async (req, res) => {
     });
   } catch (error) {
     if (error.message === 'User not found') {
+      console.log('-> finished endpoint execution POST /api/auth/user/:id/profile');
       return res.status(404).json({
         success: false,
         message: 'User not found',
@@ -409,6 +440,7 @@ const saveExtendedProfile = async (req, res) => {
       });
     }
 
+    console.log('-> finished endpoint execution POST /api/auth/user/:id/profile');
     console.error('Save extended profile error:', error);
     res.status(400).json({
       success: false,
@@ -423,11 +455,13 @@ const saveExtendedProfile = async (req, res) => {
  * Get user with extended profile (RDS + DynamoDB merged)
  */
 const getUserWithProfile = async (req, res) => {
+  console.log(`-> triggered endpoint GET /api/auth/user/:id/profile`);
   try {
     const userId = parseInt(req.params.id);
 
     const user = await authService.getUserWithProfile(userId);
 
+    console.log('-> finished endpoint execution GET /api/auth/user/:id/profile');
     res.status(200).json({
       success: true,
       message: 'User profile retrieved successfully',
@@ -435,6 +469,7 @@ const getUserWithProfile = async (req, res) => {
     });
   } catch (error) {
     if (error.message === 'User not found') {
+      console.log('-> finished endpoint execution GET /api/auth/user/:id/profile');
       return res.status(404).json({
         success: false,
         message: 'User not found',
@@ -442,6 +477,7 @@ const getUserWithProfile = async (req, res) => {
       });
     }
 
+    console.log('-> finished endpoint execution GET /api/auth/user/:id/profile');
     console.error('Get user profile error:', error);
     res.status(500).json({
       success: false,

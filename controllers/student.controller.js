@@ -10,6 +10,7 @@ const studentService = require('../services/student.service');
  * Register a new student
  */
 const signup = async (req, res) => {
+  console.log('-> triggered endpoint POST /api/students/signup');
   try {
     // Extract form data (both RDS atomic data and DynamoDB profile data)
     const {
@@ -56,6 +57,7 @@ const signup = async (req, res) => {
     const result = await studentService.signup(studentData, file);
 
     // Return success response
+    console.log('-> finished endpoint execution POST /api/students/signup');
     res.status(201).json({
       success: true,
       message: 'Student registered successfully',
@@ -64,6 +66,7 @@ const signup = async (req, res) => {
   } catch (error) {
     // Handle specific error types
     if (error.message === 'Email already exists') {
+      console.log('-> finished endpoint execution POST /api/students/signup');
       return res.status(409).json({
         success: false,
         message: 'Email already exists',
@@ -72,6 +75,7 @@ const signup = async (req, res) => {
     }
 
     if (error.message.includes('Invalid file type')) {
+      console.log('-> finished endpoint execution POST /api/students/signup');
       return res.status(400).json({
         success: false,
         message: 'Invalid file type',
@@ -80,6 +84,7 @@ const signup = async (req, res) => {
     }
 
     if (error.message.includes('Password must be') || error.message.includes('Email is required') || error.message.includes('Name is required')) {
+      console.log('-> finished endpoint execution POST /api/students/signup');
       return res.status(400).json({
         success: false,
         message: 'Validation error',
@@ -88,6 +93,7 @@ const signup = async (req, res) => {
     }
 
     // Generic error response
+    console.log('-> finished endpoint execution POST /api/students/signup');
     console.error('Student signup error:', error);
     res.status(400).json({
       success: false,
@@ -102,6 +108,7 @@ const signup = async (req, res) => {
  * Authenticate student and return token
  */
 const login = async (req, res) => {
+  console.log('-> triggered endpoint POST /api/students/login');
   try {
     const { email, password } = req.body;
 
@@ -117,6 +124,7 @@ const login = async (req, res) => {
     const result = await studentService.login(email.trim(), password);
 
     // Return success response
+    console.log('-> finished endpoint execution POST /api/students/login');
     res.status(200).json({
       success: true,
       message: 'Login successful',
@@ -125,6 +133,7 @@ const login = async (req, res) => {
   } catch (error) {
     // Handle authentication errors
     if (error.message === 'Invalid email or password' || error.message === 'Email is required' || error.message === 'Password is required') {
+      console.log('-> finished endpoint execution POST /api/students/login');
       return res.status(401).json({
         success: false,
         message: 'Invalid email or password',
@@ -133,6 +142,7 @@ const login = async (req, res) => {
     }
 
     // Generic error response
+    console.log('-> finished endpoint execution POST /api/students/login');
     console.error('Student login error:', error);
     res.status(500).json({
       success: false,
@@ -147,15 +157,18 @@ const login = async (req, res) => {
  * Get all students
  */
 const getAllStudents = async (req, res) => {
+  console.log('-> triggered endpoint GET /api/students');
   try {
     const students = await studentService.getAllStudents();
 
+    console.log('-> finished endpoint execution GET /api/students');
     res.status(200).json({
       success: true,
       message: 'Students retrieved successfully',
       data: students,
     });
   } catch (error) {
+    console.log('-> finished endpoint execution GET /api/students');
     console.error('Get all students error:', error);
     res.status(500).json({
       success: false,
@@ -170,12 +183,14 @@ const getAllStudents = async (req, res) => {
  * Get one student's complete info (RDS + DynamoDB merged)
  */
 const getStudentById = async (req, res) => {
+  console.log(`-> triggered endpoint GET /api/students/:id`);
   try {
     const studentId = req.params.id;
 
     // Get merged data from both RDS and DynamoDB
     const student = await studentService.getStudentWithProfile(studentId);
 
+    console.log('-> finished endpoint execution GET /api/students/:id');
     res.status(200).json({
       success: true,
       message: 'Student retrieved successfully',
@@ -183,6 +198,7 @@ const getStudentById = async (req, res) => {
     });
   } catch (error) {
     if (error.message === 'Student not found') {
+      console.log('-> finished endpoint execution GET /api/students/:id');
       return res.status(404).json({
         success: false,
         message: 'Student not found',
@@ -190,6 +206,7 @@ const getStudentById = async (req, res) => {
       });
     }
 
+    console.log('-> finished endpoint execution GET /api/students/:id');
     console.error('Get student error:', error);
     res.status(500).json({
       success: false,
@@ -204,6 +221,7 @@ const getStudentById = async (req, res) => {
  * Update student information (RDS + DynamoDB - Integrated)
  */
 const updateStudent = async (req, res) => {
+  console.log(`-> triggered endpoint PUT /api/students/:id`);
   try {
     const studentId = req.params.id;
     const {
@@ -247,6 +265,7 @@ const updateStudent = async (req, res) => {
     const updatedStudent = await studentService.updateStudent(studentId, updateData, file);
 
     // Return success response
+    console.log('-> finished endpoint execution PUT /api/students/:id');
     res.status(200).json({
       success: true,
       message: 'Student updated successfully',
@@ -255,6 +274,7 @@ const updateStudent = async (req, res) => {
   } catch (error) {
     // Handle specific error types
     if (error.message === 'Student not found') {
+      console.log('-> finished endpoint execution PUT /api/students/:id');
       return res.status(404).json({
         success: false,
         message: 'Student not found',
@@ -263,6 +283,7 @@ const updateStudent = async (req, res) => {
     }
 
     if (error.message.includes('Invalid file type')) {
+      console.log('-> finished endpoint execution PUT /api/students/:id');
       return res.status(400).json({
         success: false,
         message: 'Invalid file type',
@@ -271,6 +292,7 @@ const updateStudent = async (req, res) => {
     }
 
     if (error.message.includes('Password must be') || error.message.includes('Name cannot be empty')) {
+      console.log('-> finished endpoint execution PUT /api/students/:id');
       return res.status(400).json({
         success: false,
         message: 'Validation error',
@@ -279,6 +301,7 @@ const updateStudent = async (req, res) => {
     }
 
     // Generic error response
+    console.log('-> finished endpoint execution PUT /api/students/:id');
     console.error('Update student error:', error);
     res.status(400).json({
       success: false,
@@ -293,6 +316,7 @@ const updateStudent = async (req, res) => {
  * Delete student account from both RDS and DynamoDB
  */
 const deleteStudent = async (req, res) => {
+  console.log(`-> triggered endpoint DELETE /api/students/:id`);
   try {
     const studentId = req.params.id;
 
@@ -300,6 +324,7 @@ const deleteStudent = async (req, res) => {
     await studentService.deleteStudent(studentId);
 
     // Return success response
+    console.log('-> finished endpoint execution DELETE /api/students/:id');
     res.status(200).json({
       success: true,
       message: 'Student deleted successfully',
@@ -307,6 +332,7 @@ const deleteStudent = async (req, res) => {
   } catch (error) {
     // Handle specific error types
     if (error.message === 'Student not found') {
+      console.log('-> finished endpoint execution DELETE /api/students/:id');
       return res.status(404).json({
         success: false,
         message: 'Student not found',
@@ -315,6 +341,7 @@ const deleteStudent = async (req, res) => {
     }
 
     // Generic error response
+    console.log('-> finished endpoint execution DELETE /api/students/:id');
     console.error('Delete student error:', error);
     res.status(500).json({
       success: false,
@@ -329,6 +356,7 @@ const deleteStudent = async (req, res) => {
  * Save or update extended student profile in DynamoDB
  */
 const saveExtendedProfile = async (req, res) => {
+  console.log(`-> triggered endpoint POST /api/students/:id/profile`);
   try {
     const studentId = req.params.id;
     const {
@@ -364,6 +392,7 @@ const saveExtendedProfile = async (req, res) => {
     // Save profile to DynamoDB
     const savedProfile = await studentService.saveExtendedProfile(studentId, profileData);
 
+    console.log('-> finished endpoint execution POST /api/students/:id/profile');
     res.status(200).json({
       success: true,
       message: 'Student profile saved successfully',
@@ -371,6 +400,7 @@ const saveExtendedProfile = async (req, res) => {
     });
   } catch (error) {
     if (error.message === 'Student not found') {
+      console.log('-> finished endpoint execution POST /api/students/:id/profile');
       return res.status(404).json({
         success: false,
         message: 'Student not found',
@@ -378,6 +408,7 @@ const saveExtendedProfile = async (req, res) => {
       });
     }
 
+    console.log('-> finished endpoint execution POST /api/students/:id/profile');
     console.error('Save extended profile error:', error);
     res.status(400).json({
       success: false,
@@ -392,11 +423,13 @@ const saveExtendedProfile = async (req, res) => {
  * Get student with extended profile (RDS + DynamoDB merged)
  */
 const getStudentWithProfile = async (req, res) => {
+  console.log(`-> triggered endpoint GET /api/students/:id/profile`);
   try {
     const studentId = req.params.id;
 
     const student = await studentService.getStudentWithProfile(studentId);
 
+    console.log('-> finished endpoint execution GET /api/students/:id/profile');
     res.status(200).json({
       success: true,
       message: 'Student profile retrieved successfully',
@@ -404,6 +437,7 @@ const getStudentWithProfile = async (req, res) => {
     });
   } catch (error) {
     if (error.message === 'Student not found') {
+      console.log('-> finished endpoint execution GET /api/students/:id/profile');
       return res.status(404).json({
         success: false,
         message: 'Student not found',
@@ -411,6 +445,7 @@ const getStudentWithProfile = async (req, res) => {
       });
     }
 
+    console.log('-> finished endpoint execution GET /api/students/:id/profile');
     console.error('Get student profile error:', error);
     res.status(500).json({
       success: false,

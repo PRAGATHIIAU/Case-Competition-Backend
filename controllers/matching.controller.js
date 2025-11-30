@@ -11,6 +11,7 @@ const { sendMentorNotification } = require('../services/email.service');
  * Get all mentors (alumni willing to be mentors)
  */
 const getAllMentors = async (req, res) => {
+  console.log('-> triggered endpoint GET /api/matching/mentors');
   try {
     const mentors = await matchingService.getAllMentors();
     
@@ -20,7 +21,9 @@ const getAllMentors = async (req, res) => {
       count: mentors.length,
       data: mentors,
     });
+    console.log('-> finished endpoint execution GET /api/matching/mentors');
   } catch (error) {
+    console.log('-> finished endpoint execution GET /api/matching/mentors');
     console.error('Get mentors error:', error);
     res.status(500).json({
       success: false,
@@ -35,6 +38,7 @@ const getAllMentors = async (req, res) => {
  * Get all mentees (students)
  */
 const getAllMentees = async (req, res) => {
+  console.log('-> triggered endpoint GET /api/matching/mentees');
   try {
     const mentees = await matchingService.getAllMentees();
     
@@ -44,7 +48,9 @@ const getAllMentees = async (req, res) => {
       count: mentees.length,
       data: mentees,
     });
+    console.log('-> finished endpoint execution GET /api/matching/mentees');
   } catch (error) {
+    console.log('-> finished endpoint execution GET /api/matching/mentees');
     console.error('Get mentees error:', error);
     res.status(500).json({
       success: false,
@@ -61,6 +67,7 @@ const getAllMentees = async (req, res) => {
  *   - testing: boolean (default: false) - If true, send emails to ADMIN_EMAIL instead of mentor emails
  */
 const performMatching = async (req, res) => {
+  console.log('-> triggered endpoint POST /api/matching/match');
   try {
     // Get testing parameter from query string
     const testing = req.query.testing === 'true' || req.query.testing === true;
@@ -69,6 +76,7 @@ const performMatching = async (req, res) => {
     const result = await matchingService.performMatching();
     
     if (!result.success) {
+      console.log('-> finished endpoint execution POST /api/matching/match');
       return res.status(400).json({
         success: false,
         message: result.message || 'Matching failed',
@@ -190,7 +198,9 @@ const performMatching = async (req, res) => {
         results: emailResults,
       },
     });
+    console.log('-> finished endpoint execution POST /api/matching/match');
   } catch (error) {
+    console.log('-> finished endpoint execution POST /api/matching/match');
     console.error('Matching error:', error);
     res.status(500).json({
       success: false,
