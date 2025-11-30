@@ -1,4 +1,4 @@
-const { exec } = require('child_process');
+const { exec, spawn } = require('child_process');
 const { promisify } = require('util');
 const path = require('path');
 const fs = require('fs').promises;
@@ -181,45 +181,66 @@ const performMatching = async () => {
     
     // Use file-based approach for better cross-platform compatibility
     const matchingDir = path.join(__dirname, '..', 'matching');
-    const tempInputFile = path.join(matchingDir, `temp_input_${Date.now()}.json`);
-    const tempOutputFile = path.join(matchingDir, `temp_output_${Date.now()}.json`);
+    const timestamp = Date.now();
+    const tempInputFile = path.join(matchingDir, `temp_input_${timestamp}.json`);
     
     let result;
+    let stdoutData = '';
+    let stderrData = '';
+    let outputJson = '';
+    
     try {
       // Write input to temp file
       await fs.writeFile(tempInputFile, inputJson, 'utf8');
       
-      // Execute Python script with file path as argument (more reliable than stdin)
-      // The Python script supports reading from a file if path is provided as argument
-      // Redirect stderr to null device to prevent mixing with JSON output on stdout
-      const isWindows = process.platform === 'win32';
-      const nullDevice = isWindows ? 'nul' : '/dev/null';
-      const command = `${pythonCommand} "${scriptPath}" "${tempInputFile}" > "${tempOutputFile}" 2>${nullDevice}`;
+      // Execute Python script using spawn for better error handling
+      // This approach works better on Windows PowerShell
       
-      await execAsync(command, {
-        maxBuffer: 10 * 1024 * 1024, // 10MB buffer
-        shell: true
+      const pythonProcess = spawn(pythonCommand, [scriptPath, tempInputFile], {
+        shell: false,
+        stdio: ['ignore', 'pipe', 'pipe']
       });
       
-      // Read output from temp file (should only contain JSON from stdout)
-      let outputJson;
-      try {
-        outputJson = await fs.readFile(tempOutputFile, 'utf8');
-        outputJson = outputJson.trim();
+      // Collect stdout
+      pythonProcess.stdout.on('data', (data) => {
+        stdoutData += data.toString();
+      });
+      
+      // Collect stderr
+      pythonProcess.stderr.on('data', (data) => {
+        stderrData += data.toString();
+      });
+      
+      // Wait for process to complete
+      await new Promise((resolve, reject) => {
+        pythonProcess.on('close', (code) => {
+          if (code !== 0) {
+            reject(new Error(`Python script exited with code ${code}. stderr: ${stderrData.substring(0, 1000)}`));
+          } else {
+            resolve();
+          }
+        });
         
-        // Remove any BOM or leading whitespace that might interfere
-        if (outputJson.charCodeAt(0) === 0xFEFF) {
-          outputJson = outputJson.slice(1);
-        }
-      } catch (readError) {
-        throw new Error(`Failed to read Python script output: ${readError.message}`);
+        pythonProcess.on('error', (error) => {
+          reject(new Error(`Failed to spawn Python process: ${error.message}. stderr: ${stderrData.substring(0, 1000)}`));
+        });
+      });
+      
+      // Process output
+      outputJson = stdoutData.trim();
+      
+      // Remove any BOM or leading whitespace that might interfere
+      if (outputJson.length > 0 && outputJson.charCodeAt(0) === 0xFEFF) {
+        outputJson = outputJson.slice(1);
       }
       
-      // Clean up temp files
-      await Promise.all([
-        fs.unlink(tempInputFile).catch(() => {}),
-        fs.unlink(tempOutputFile).catch(() => {})
-      ]);
+      // Log stderr if there's any (for debugging, but don't fail if it's just warnings)
+      if (stderrData.trim()) {
+        console.warn('Python script stderr (warnings/info):', stderrData.substring(0, 500));
+      }
+      
+      // Clean up temp input file
+      await fs.unlink(tempInputFile).catch(() => {});
       
       // Validate that output starts with JSON (either { or [)
       if (!outputJson || (!outputJson.startsWith('{') && !outputJson.startsWith('['))) {
@@ -233,19 +254,16 @@ const performMatching = async () => {
         throw new Error(`Failed to parse JSON output: ${parseError.message}. Output preview: ${outputJson.substring(0, 500)}`);
       }
     } catch (error) {
-      // Clean up temp files on error
-      await Promise.all([
-        fs.unlink(tempInputFile).catch(() => {}),
-        fs.unlink(tempOutputFile).catch(() => {})
-      ]);
+      // Clean up temp input file on error
+      await fs.unlink(tempInputFile).catch(() => {});
       
-      // If parsing failed, try to read what was in the output file to debug
-      try {
-        const errorOutput = await fs.readFile(tempOutputFile, 'utf8').catch(() => '');
-        console.error('Python script stdout output (non-JSON):', errorOutput.substring(0, 500));
-        console.error('JSON parse error details:', error.message);
-      } catch (readError) {
-        // Ignore read error
+      // Log error details for debugging
+      console.error('Python script execution error:', error.message);
+      if (stderrData) {
+        console.error('Python script stderr:', stderrData.substring(0, 1000));
+      }
+      if (stdoutData) {
+        console.error('Python script stdout (on error):', stdoutData.substring(0, 500));
       }
       
       throw new Error(`Failed to execute matching script: ${error.message}`);

@@ -66,10 +66,28 @@ exports.handler = async (event) => {
             throw new Error('userId must be a valid number');
           }
           
-          result = await dynamodb.get({
+          console.log(`Getting alumni profile for userId: ${getUserId} from table: ${tableName}`);
+          
+          result = await dynamodb.send(new GetCommand({
             TableName: tableName,
             Key: { userId: getUserId }
-          }).promise();
+          }));
+          
+          console.log(`DynamoDB get result for userId ${getUserId}:`, {
+            hasItem: !!result.Item,
+            itemKeys: result.Item ? Object.keys(result.Item) : [],
+          });
+          
+          const responseData = {
+            success: true,
+            data: result.Item || null,
+          };
+          
+          console.log(`Returning response for userId ${getUserId}:`, {
+            success: responseData.success,
+            hasData: !!responseData.data,
+            dataKeys: responseData.data ? Object.keys(responseData.data) : [],
+          });
           
           return {
             statusCode: 200,
@@ -77,10 +95,7 @@ exports.handler = async (event) => {
               'Content-Type': 'application/json',
               'Access-Control-Allow-Origin': '*',
             },
-            body: JSON.stringify({
-              success: true,
-              data: result.Item || null,
-            }),
+            body: JSON.stringify(responseData),
           };
           
         case 'putAlumniProfile':
@@ -100,10 +115,10 @@ exports.handler = async (event) => {
           
           const now = new Date().toISOString();
           
-          const existingAlumniProfile = await dynamodb.get({
+          const existingAlumniProfile = await dynamodb.send(new GetCommand({
             TableName: tableName,
             Key: { userId: putUserId }
-          }).promise();
+          }));
           
           const alumniProfileData = {
             userId: putUserId,
@@ -123,10 +138,10 @@ exports.handler = async (event) => {
             alumniProfileData.createdAt = now;
           }
           
-          await dynamodb.put({
+          await dynamodb.send(new PutCommand({
             TableName: tableName,
             Item: alumniProfileData,
-          }).promise();
+          }));
           
           return {
             statusCode: 200,
@@ -151,10 +166,10 @@ exports.handler = async (event) => {
             throw new Error('userId must be a valid number');
           }
           
-          const alumniProfileToUpdate = await dynamodb.get({
+          const alumniProfileToUpdate = await dynamodb.send(new GetCommand({
             TableName: tableName,
             Key: { userId: updateUserId }
-          }).promise();
+          }));
           
           if (!alumniProfileToUpdate.Item) {
             return {
@@ -195,14 +210,14 @@ exports.handler = async (event) => {
             throw new Error('No fields to update');
           }
           
-          const alumniUpdateResult = await dynamodb.update({
+          const alumniUpdateResult = await dynamodb.send(new UpdateCommand({
             TableName: tableName,
             Key: { userId: updateUserId },
             UpdateExpression: `SET ${alumniUpdateExpressions.join(', ')}`,
             ExpressionAttributeNames: alumniExpressionAttributeNames,
             ExpressionAttributeValues: alumniExpressionAttributeValues,
             ReturnValues: 'ALL_NEW',
-          }).promise();
+          }));
           
           return {
             statusCode: 200,
@@ -227,10 +242,10 @@ exports.handler = async (event) => {
             throw new Error('userId must be a valid number');
           }
           
-          const alumniProfileToDelete = await dynamodb.get({
+          const alumniProfileToDelete = await dynamodb.send(new GetCommand({
             TableName: tableName,
             Key: { userId: deleteUserId }
-          }).promise();
+          }));
           
           if (!alumniProfileToDelete.Item) {
             return {
@@ -246,10 +261,10 @@ exports.handler = async (event) => {
             };
           }
           
-          await dynamodb.delete({
+          await dynamodb.send(new DeleteCommand({
             TableName: tableName,
             Key: { userId: deleteUserId }
-          }).promise();
+          }));
           
           return {
             statusCode: 200,

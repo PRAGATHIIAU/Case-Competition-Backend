@@ -210,6 +210,13 @@ const getAlumniProfile = async (userId) => {
     // Ensure userId is sent as a number
     const numericUserId = typeof userId === 'string' ? parseInt(userId, 10) : Number(userId);
     
+    if (isNaN(numericUserId)) {
+      console.error(`Invalid userId for getAlumniProfile: ${userId} (type: ${typeof userId})`);
+      return null;
+    }
+    
+    console.log(`Fetching alumni profile for userId: ${numericUserId} from ${API_GATEWAY_DYNAMODB_URL}`);
+    
     const response = await axios.post(API_GATEWAY_DYNAMODB_URL, {
       operation: 'getAlumniProfile',
       userId: numericUserId,
@@ -220,37 +227,90 @@ const getAlumniProfile = async (userId) => {
       timeout: 30000,
     });
 
-    if (response.data && response.data.success) {
-      return response.data.data;
+    // Log response for debugging
+    console.log(`DynamoDB response for userId ${numericUserId}:`, {
+      status: response.status,
+      hasData: !!response.data,
+      success: response.data?.success,
+      hasDataField: !!response.data?.data,
+      dataType: typeof response.data?.data,
+    });
+
+    // Handle different response formats
+    if (response.data) {
+      // Check if response is wrapped in body (API Gateway format)
+      let responseData = response.data;
+      if (responseData.body && typeof responseData.body === 'string') {
+        try {
+          responseData = JSON.parse(responseData.body);
+        } catch (e) {
+          console.error(`Failed to parse response.body for userId ${numericUserId}:`, e);
+        }
+      }
+      
+      if (responseData.success && responseData.data !== null && responseData.data !== undefined) {
+        console.log(`Successfully fetched profile for userId ${numericUserId}, has data:`, {
+          hasSkills: !!responseData.data.skills,
+          hasAspirations: !!responseData.data.aspirations,
+          hasProjects: !!responseData.data.projects,
+          hasExperiences: !!responseData.data.experiences,
+        });
+        return responseData.data;
+      } else if (responseData.success && (responseData.data === null || responseData.data === undefined)) {
+        // Profile not found (this is expected for users without profiles)
+        console.log(`Profile not found for userId ${numericUserId} (this is normal if user hasn't created a profile)`);
+        return null;
+      } else {
+        // Response indicates failure
+        console.warn(`DynamoDB response indicates failure for userId ${numericUserId}:`, responseData);
+        return null;
+      }
     } else {
+      console.warn(`No data in response for userId ${numericUserId}`);
       return null;
     }
   } catch (error) {
-    console.error('DynamoDB get error:', error);
-    
-    // Return null for 404 (profile not found) - this is expected
-    if (error.response && error.response.status === 404) {
+    // Enhanced error logging
+    if (error.response) {
+      // API Gateway/Lambda returned an error response
+      const status = error.response.status;
+      const responseData = error.response.data;
+      
+      console.error(`DynamoDB API error for userId ${userId}:`, {
+        status,
+        statusText: error.response.statusText,
+        data: responseData,
+        url: API_GATEWAY_DYNAMODB_URL,
+      });
+      
+      // Return null for 404 (profile not found) - this is expected
+      if (status === 404) {
+        console.log(`Profile not found for userId ${userId} (404)`);
+        return null;
+      }
+      
+      // Log 500 errors but still return null to allow system to continue
+      if (status === 500) {
+        console.error(`DynamoDB server error (500) for userId ${userId}, returning null profile`);
+        return null;
+      }
+      
+      // For other HTTP errors, log and return null
+      console.error(`DynamoDB HTTP error (${status}) for userId ${userId}, returning null profile`);
+      return null;
+    } else if (error.request) {
+      // Request was made but no response received
+      console.error(`DynamoDB request error for userId ${userId}:`, {
+        message: error.message,
+        code: error.code,
+        url: API_GATEWAY_DYNAMODB_URL,
+      });
+      return null;
+    } else {
+      // Error setting up the request
+      console.error(`DynamoDB setup error for userId ${userId}:`, error.message);
       return null;
     }
-    
-    // Return null for 500 (server error) - allow system to continue gracefully
-    // This prevents matching from failing when DynamoDB/Lambda has temporary issues
-    if (error.response && error.response.status === 500) {
-      console.warn(`DynamoDB server error for userId ${userId}, returning null profile`);
-      return null;
-    }
-    
-    // For other errors (network, timeout, etc.), also return null to prevent blocking
-    // Only throw for configuration errors (missing URL)
-    if (error.code === 'ECONNREFUSED' || error.code === 'ETIMEDOUT' || error.code === 'ENOTFOUND') {
-      console.warn(`DynamoDB connection error for userId ${userId}, returning null profile`);
-      return null;
-    }
-    
-    // Only throw for unexpected errors that indicate a configuration problem
-    // This allows the matching service to continue even if some profiles fail
-    console.warn(`DynamoDB error for userId ${userId}, returning null profile:`, error.message);
-    return null;
   }
 };
 
