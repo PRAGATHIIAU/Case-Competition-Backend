@@ -132,10 +132,28 @@ def vectorize_profiles(profiles: List[Dict[str, Any]]) -> Tuple[np.ndarray, Tfid
         strip_accents='unicode'
     )
     
+    # Check if we have any non-empty text
+    non_empty_texts = [text for text in texts if text.strip()]
+    
+    if not non_empty_texts:
+        # If all profiles are empty, return zero vectors
+        # Create dummy vectorizer to maintain shape
+        from sklearn.feature_extraction.text import CountVectorizer
+        vectorizer = CountVectorizer()
+        # Return zero matrix with shape (n_profiles, 1)
+        vectors = np.zeros((len(profiles), 1))
+        print(f"Warning: All {len(profiles)} profiles have empty text data. Returning zero vectors.", file=sys.stderr)
+        return vectors, vectorizer
+    
     # Vectorize the texts
     try:
         vectors = vectorizer.fit_transform(texts)
+        
+        # Check if vectors are all zeros
+        if vectors.nnz == 0:
+            print(f"Warning: TF-IDF vectors are all zeros. This means no text features were extracted.", file=sys.stderr)
     except ValueError as e:
+        print(f"Error in TF-IDF vectorization: {e}. Falling back to CountVectorizer.", file=sys.stderr)
         # Fallback: if vectorization fails, use CountVectorizer
         from sklearn.feature_extraction.text import CountVectorizer
         vectorizer = CountVectorizer(
@@ -168,6 +186,11 @@ def compute_similarity_scores(
     """
     # Compute cosine similarity
     similarity_matrix = cosine_similarity(mentee_vectors, mentor_vectors)
+    
+    # Handle NaN values (can occur when comparing zero vectors)
+    # Replace NaN with 0 (zero vectors have no similarity)
+    similarity_matrix = np.nan_to_num(similarity_matrix, nan=0.0, posinf=1.0, neginf=0.0)
+    
     return similarity_matrix
 
 
@@ -196,7 +219,9 @@ def match_mentees_to_mentors(
         capacity = mentor.get('mentor_capacity')
         
         # Only process mentors who are willing and have capacity
-        if mentor.get('willing_to_be_mentor') and capacity and capacity > 0:
+        # Handle None values for capacity (convert None to 0)
+        capacity = capacity if capacity is not None else 0
+        if mentor.get('willing_to_be_mentor') and capacity > 0:
             mentor_capacities[mentor_id] = capacity
             mentor_assignments[mentor_id] = []
     
@@ -245,7 +270,7 @@ def match_mentees_to_mentors(
                 'mentor_id': mentor_id,
                 'mentor_name': mentor.get('name', 'Unknown'),
                 'mentor_email': mentor.get('email', ''),
-                'capacity': mentor.get('mentor_capacity', 0),
+                'capacity': mentor.get('mentor_capacity') or 0,
                 'assigned_count': len(mentor_assignments[mentor_id]),
                 'mentees': mentor_assignments[mentor_id]
             }
@@ -265,9 +290,10 @@ def perform_matching(mentors_data: List[Dict[str, Any]], mentees_data: List[Dict
         Dictionary containing matching results
     """
     # Filter mentors: only include those willing to be mentors
+    # Handle None values for mentor_capacity (convert None to 0)
     mentors = [
         mentor for mentor in mentors_data
-        if mentor.get('willing_to_be_mentor') and mentor.get('mentor_capacity', 0) > 0
+        if mentor.get('willing_to_be_mentor') and (mentor.get('mentor_capacity') or 0) > 0
     ]
     
     if not mentors:
@@ -286,6 +312,24 @@ def perform_matching(mentors_data: List[Dict[str, Any]], mentees_data: List[Dict
     
     # Vectorize profiles
     print(f"Vectorizing {len(mentors)} mentors and {len(mentees_data)} mentees...", file=sys.stderr)
+    
+    # Debug: Check profile text content
+    mentor_texts = [extract_text_from_profile(m) for m in mentors]
+    mentee_texts = [extract_text_from_profile(m) for m in mentees_data]
+    
+    # Count non-empty profiles
+    non_empty_mentors = sum(1 for t in mentor_texts if t.strip())
+    non_empty_mentees = sum(1 for t in mentee_texts if t.strip())
+    print(f"Profiles with text data: {non_empty_mentors}/{len(mentors)} mentors, {non_empty_mentees}/{len(mentees_data)} mentees", file=sys.stderr)
+    
+    # Sample a few profile texts for debugging (first 100 chars)
+    if len(mentor_texts) > 0:
+        sample_mentor_text = mentor_texts[0][:100] if mentor_texts[0] else "(empty)"
+        print(f"Sample mentor text (first 100 chars): {sample_mentor_text}", file=sys.stderr)
+    if len(mentee_texts) > 0:
+        sample_mentee_text = mentee_texts[0][:100] if mentee_texts[0] else "(empty)"
+        print(f"Sample mentee text (first 100 chars): {sample_mentee_text}", file=sys.stderr)
+    
     mentor_vectors, mentor_vectorizer = vectorize_profiles(mentors)
     mentee_vectors, _ = vectorize_profiles(mentees_data)
     
@@ -298,9 +342,22 @@ def perform_matching(mentors_data: List[Dict[str, Any]], mentees_data: List[Dict
     mentor_vectors = all_vectors[:len(mentors)]
     mentee_vectors = all_vectors[len(mentors):]
     
+    # Debug: Check if vectors are all zeros
+    mentor_nonzero = np.count_nonzero(mentor_vectors)
+    mentee_nonzero = np.count_nonzero(mentee_vectors)
+    print(f"Non-zero vector elements: {mentor_nonzero} in mentor vectors, {mentee_nonzero} in mentee vectors", file=sys.stderr)
+    
     # Compute similarity scores
     print("Computing similarity scores...", file=sys.stderr)
     similarity_matrix = compute_similarity_scores(mentor_vectors, mentee_vectors)
+    
+    # Debug: Check similarity matrix statistics
+    if similarity_matrix.size > 0:
+        max_sim = np.max(similarity_matrix)
+        min_sim = np.min(similarity_matrix)
+        mean_sim = np.mean(similarity_matrix)
+        nonzero_sim = np.count_nonzero(similarity_matrix)
+        print(f"Similarity matrix stats: max={max_sim:.4f}, min={min_sim:.4f}, mean={mean_sim:.4f}, non-zero={nonzero_sim}/{similarity_matrix.size}", file=sys.stderr)
     
     # Match mentees to mentors
     print("Matching mentees to mentors...", file=sys.stderr)
@@ -308,7 +365,8 @@ def perform_matching(mentors_data: List[Dict[str, Any]], mentees_data: List[Dict
     
     # Calculate statistics
     total_mentees_assigned = sum(len(m['mentees']) for m in matches.values())
-    total_capacity = sum(m.get('mentor_capacity', 0) for m in mentors)
+    # Handle None values for mentor_capacity (convert None to 0)
+    total_capacity = sum((m.get('mentor_capacity') or 0) for m in mentors)
     
     return {
         'success': True,

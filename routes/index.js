@@ -6,6 +6,7 @@ const eventRoutes = require('./event.routes');
 const studentRoutes = require('./student.routes');
 const matchingRoutes = require('./matching.routes');
 const adminRoutes = require('./admin.routes');
+const connectionRequestRoutes = require('./connectionRequest.routes');
 
 // Routes
 router.get('/', helloController.getHello);
@@ -21,6 +22,9 @@ router.use('/admin', adminRoutes);
 
 // Matching routes
 router.use('/api/matching', matchingRoutes);
+
+// Connection Request routes
+router.use('/api/connection-requests', connectionRequestRoutes);
 
 module.exports = router;
 

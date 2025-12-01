@@ -17,10 +17,12 @@ const analyticsService = require('../services/analytics.service');
  * }
  */
 const getBasicStats = async (req, res) => {
+  console.log('-> triggered endpoint GET /admin/analytics/basic-stats');
   try {
     const stats = await analyticsService.getBasicStats();
 
     // Return exactly the shape requested in the spec
+    console.log('-> finished endpoint execution GET /admin/analytics/basic-stats');
     return res.status(200).json({
       totalStudents: stats.totalStudents,
       totalAlumni: stats.totalAlumni,
@@ -28,6 +30,7 @@ const getBasicStats = async (req, res) => {
       inactiveAlumniCount: stats.inactiveAlumniCount,
     });
   } catch (error) {
+    console.log('-> finished endpoint execution GET /admin/analytics/basic-stats');
     console.error('Get basic analytics stats error:', error);
     return res.status(500).json({
       success: false,
@@ -48,15 +51,18 @@ const getBasicStats = async (req, res) => {
  * }
  */
 const getStudentEngagement = async (req, res) => {
+  console.log('-> triggered endpoint GET /admin/analytics/student-engagement');
   try {
     const stats = await analyticsService.getStudentEngagement();
 
+    console.log('-> finished endpoint execution GET /admin/analytics/student-engagement');
     return res.status(200).json({
       activeStudents: stats.activeStudents,
       inactiveStudents: stats.inactiveStudents,
       avgProfileCompletion: stats.avgProfileCompletion,
     });
   } catch (error) {
+    console.log('-> finished endpoint execution GET /admin/analytics/student-engagement');
     console.error('Get student engagement analytics error:', error);
     return res.status(500).json({
       success: false,
@@ -78,9 +84,11 @@ const getStudentEngagement = async (req, res) => {
  * }
  */
 const getAlumniEngagement = async (req, res) => {
+  console.log('-> triggered endpoint GET /admin/analytics/alumni-engagement');
   try {
     const stats = await analyticsService.getAlumniEngagement();
 
+    console.log('-> finished endpoint execution GET /admin/analytics/alumni-engagement');
     return res.status(200).json({
       totalAlumni: stats.totalAlumni,
       activeAlumni: stats.activeAlumni,
@@ -88,6 +96,7 @@ const getAlumniEngagement = async (req, res) => {
       judgesThisMonth: stats.judgesThisMonth,
     });
   } catch (error) {
+    console.log('-> finished endpoint execution GET /admin/analytics/alumni-engagement');
     console.error('Get alumni engagement analytics error:', error);
     return res.status(500).json({
       success: false,
@@ -108,10 +117,13 @@ const getAlumniEngagement = async (req, res) => {
  * Inactive = last_login older than 60 days.
  */
 const getInactiveAlumni = async (req, res) => {
+  console.log('-> triggered endpoint GET /admin/analytics/inactive-alumni');
   try {
     const list = await analyticsService.getInactiveAlumni();
+    console.log('-> finished endpoint execution GET /admin/analytics/inactive-alumni');
     return res.status(200).json(list);
   } catch (error) {
+    console.log('-> finished endpoint execution GET /admin/analytics/inactive-alumni');
     console.error('Get inactive alumni analytics error:', error);
     return res.status(500).json({
       success: false,
@@ -136,12 +148,14 @@ const getInactiveAlumni = async (req, res) => {
  * and logs a TODO in the server logs.
  */
 const getFeedbackSummary = async (req, res) => {
+  console.log('-> triggered endpoint GET /admin/analytics/feedback-summary');
   // Note: This endpoint currently only returns data from the "feedback" table.
   // Future enhancements can join with students (last_login) and student_profiles
   // to add richer engagement context.
   try {
     const summary = await analyticsService.getFeedbackSummary();
 
+    console.log('-> finished endpoint execution GET /admin/analytics/feedback-summary');
     return res.status(200).json({
       studentFeedbackCount: summary.studentFeedbackCount,
       employerFeedbackCount: summary.employerFeedbackCount,
@@ -149,6 +163,7 @@ const getFeedbackSummary = async (req, res) => {
       avgEmployerRating: summary.avgEmployerRating,
     });
   } catch (error) {
+    console.log('-> finished endpoint execution GET /admin/analytics/feedback-summary');
     console.error('Get feedback summary analytics error:', error);
     return res.status(500).json({
       success: false,
@@ -175,10 +190,13 @@ const getFeedbackSummary = async (req, res) => {
  * Data source: DynamoDB Events table (via eventRepository.getAllEvents()).
  */
 const getEventSummaries = async (req, res) => {
+  console.log('-> triggered endpoint GET /admin/analytics/events/summary');
   try {
     const summaries = await analyticsService.getEventSummaries();
+    console.log('-> finished endpoint execution GET /admin/analytics/events/summary');
     return res.status(200).json(summaries);
   } catch (error) {
+    console.log('-> finished endpoint execution GET /admin/analytics/events/summary');
     console.error('Get event summaries analytics error:', error);
     return res.status(500).json({
       success: false,
@@ -205,15 +223,18 @@ const getEventSummaries = async (req, res) => {
  * Data source: DynamoDB Events table (via eventRepository.getAllEvents()).
  */
 const getStudentEventTrends = async (req, res) => {
+  console.log('-> triggered endpoint GET /admin/analytics/student-event-trends');
   try {
     const stats = await analyticsService.getStudentEventTrends();
 
+    console.log('-> finished endpoint execution GET /admin/analytics/student-event-trends');
     return res.status(200).json({
       avgTeamsPerEvent: stats.avgTeamsPerEvent,
       avgStudentsPerTeam: stats.avgStudentsPerTeam,
       mostPopularEvent: stats.mostPopularEvent,
     });
   } catch (error) {
+    console.log('-> finished endpoint execution GET /admin/analytics/student-event-trends');
     console.error('Get student-event trends analytics error:', error);
     return res.status(500).json({
       success: false,
@@ -237,9 +258,11 @@ const getStudentEventTrends = async (req, res) => {
  * Data source: users table (willing_to_be_mentor, willing_to_be_judge, willing_to_be_sponsor).
  */
 const getAlumniRoles = async (req, res) => {
+  console.log('-> triggered endpoint GET /admin/analytics/alumni-roles');
   try {
     const stats = await analyticsService.getAlumniRoles();
 
+    console.log('-> finished endpoint execution GET /admin/analytics/alumni-roles');
     return res.status(200).json({
       mentors: stats.mentors,
       judges: stats.judges,
@@ -247,6 +270,7 @@ const getAlumniRoles = async (req, res) => {
       multiRole: stats.multiRole,
     });
   } catch (error) {
+    console.log('-> finished endpoint execution GET /admin/analytics/alumni-roles');
     console.error('Get alumni roles analytics error:', error);
     return res.status(500).json({
       success: false,
@@ -268,10 +292,13 @@ const getAlumniRoles = async (req, res) => {
  * }
  */
 const getSystemHealth = async (req, res) => {
+  console.log('-> triggered endpoint GET /admin/analytics/system-health');
   try {
     const health = await analyticsService.getSystemHealth();
+    console.log('-> finished endpoint execution GET /admin/analytics/system-health');
     return res.status(200).json(health);
   } catch (error) {
+    console.log('-> finished endpoint execution GET /admin/analytics/system-health');
     console.error('Get system health analytics error:', error);
     return res.status(500).json({
       success: false,
@@ -294,13 +321,16 @@ const getSystemHealth = async (req, res) => {
  * TODO: Wire this up to a real admin activity/audit log in the database.
  */
 const getAdminActivity = async (req, res) => {
+  console.log('-> triggered endpoint GET /admin/analytics/admin-activity');
   try {
     const actions = await analyticsService.getAdminActivity();
 
+    console.log('-> finished endpoint execution GET /admin/analytics/admin-activity');
     return res.status(200).json({
       recentActions: actions,
     });
   } catch (error) {
+    console.log('-> finished endpoint execution GET /admin/analytics/admin-activity');
     console.error('Get admin activity analytics error:', error);
     return res.status(500).json({
       success: false,
