@@ -21,5 +21,9 @@ router.get('/mentees', matchingController.getAllMentees);
 // Perform mentor-mentee matching based on similarity scores
 router.post('/match', matchingController.performMatching);
 
+// GET /api/matching/mentor/:mentorId/similar-students
+// Get similar students for a specific mentor, ordered by similarity score (descending)
+router.get('/mentor/:mentorId/similar-students', matchingController.getSimilarStudentsForMentor);
+
 module.exports = router;
 

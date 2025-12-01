@@ -12,6 +12,29 @@ const authService = require('../services/auth.service');
 const signup = async (req, res) => {
   console.log('-> triggered endpoint POST /api/auth/signup');
   try {
+    // Debug: Log request details
+    console.log('📥 Request received:', {
+      contentType: req.headers['content-type'],
+      hasFile: !!req.file,
+      fileDetails: req.file ? {
+        fieldname: req.file.fieldname,
+        originalname: req.file.originalname,
+        mimetype: req.file.mimetype,
+        size: req.file.size,
+        bufferLength: req.file.buffer?.length,
+      } : null,
+      bodyKeys: Object.keys(req.body || {}),
+      bodySample: {
+        email: req.body?.email,
+        name: req.body?.name,
+        hasSkills: !!req.body?.skills,
+        hasMajor: !!req.body?.major,
+        major: req.body?.major,
+        hasGradYear: !!req.body?.grad_year,
+        gradYear: req.body?.grad_year,
+      },
+    });
+    
     // Extract form data (both RDS atomic data and DynamoDB profile data)
     const {
       // RDS atomic fields + willingness flags
@@ -19,6 +42,7 @@ const signup = async (req, res) => {
       name,
       password,
       contact,
+      linkedin_url,
       willing_to_be_mentor,
       mentor_capacity,
       willing_to_be_judge,
@@ -26,6 +50,10 @@ const signup = async (req, res) => {
       // DynamoDB profile fields
       skills,
       aspirations,
+      bio,
+      major,
+      grad_year,
+      relevant_coursework,
       parsed_resume,
       projects,
       experiences,
@@ -33,7 +61,32 @@ const signup = async (req, res) => {
     } = req.body;
 
     // Get uploaded file from multer
-    const file = req.file;
+    // Backend expects field name 'resume' - check if file exists
+    let file = req.file;
+    
+    // Debug: Log file details
+    console.log('📄 File upload details:', {
+      fileReceived: !!file,
+      fileFieldName: file?.fieldname,
+      fileName: file?.originalname,
+      fileMimeType: file?.mimetype,
+      fileSize: file?.size,
+      hasBuffer: !!file?.buffer,
+      bufferLength: file?.buffer?.length,
+      allFiles: req.files ? Object.keys(req.files) : null,
+    });
+    
+    // Check if file was received - if not, log warning
+    if (!file) {
+      console.warn('⚠️ WARNING: No file received in request!');
+      console.warn('   Expected field name: "resume"');
+      console.warn('   Request content-type:', req.headers['content-type']);
+      console.warn('   Check if frontend is:');
+      console.warn('     1. Using FormData (not JSON)');
+      console.warn('     2. Using field name "resume" (not "file", "resumeFile", etc.)');
+      console.warn('     3. Actually including the file in FormData');
+      console.warn('   Without a file, resume parsing will not occur, and extracted fields (major, grad_year, linkedin_url) will be null.');
+    }
 
     // Debug: Log received values for willingness flags
     console.log('[Signup] Received willingness flags:', {
@@ -64,6 +117,7 @@ const signup = async (req, res) => {
       name: name?.trim(),
       password,
       contact: contact?.trim() || null,
+      linkedin_url: linkedin_url?.trim() || null,
       // Normalize willingness flags
       willing_to_be_mentor: normalizeWillingnessFlag(willing_to_be_mentor),
       mentor_capacity: mentor_capacity ? parseInt(mentor_capacity) : null,
@@ -74,6 +128,10 @@ const signup = async (req, res) => {
       // DynamoDB profile data
       skills: skills ? (Array.isArray(skills) ? skills : JSON.parse(skills)) : undefined,
       aspirations: aspirations?.trim() || undefined,
+      bio: bio?.trim() || undefined,
+      major: major?.trim() || undefined,
+      grad_year: grad_year ? parseInt(grad_year) : undefined,
+      relevant_coursework: relevant_coursework ? (Array.isArray(relevant_coursework) ? relevant_coursework : JSON.parse(relevant_coursework)) : undefined,
       parsed_resume: parsed_resume ? (typeof parsed_resume === 'string' ? JSON.parse(parsed_resume) : parsed_resume) : undefined,
       projects: projects ? (Array.isArray(projects) ? projects : JSON.parse(projects)) : undefined,
       experiences: experiences ? (Array.isArray(experiences) ? experiences : JSON.parse(experiences)) : undefined,

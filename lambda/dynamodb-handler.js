@@ -124,11 +124,17 @@ exports.handler = async (event) => {
             userId: putUserId,
             skills: body.profileData.skills || [],
             aspirations: body.profileData.aspirations || null,
+            bio: body.profileData.bio || null,
+            major: body.profileData.major || null,
+            grad_year: body.profileData.grad_year || null,
+            relevant_coursework: body.profileData.relevant_coursework || [],
             parsed_resume: body.profileData.parsed_resume || null,
             projects: body.profileData.projects || [],
             experiences: body.profileData.experiences || [],
             achievements: body.profileData.achievements || [],
             resume_url: body.profileData.resume_url || null,
+            linkedin_url: body.profileData.linkedin_url || null,
+            github_url: body.profileData.github_url || null,
             updatedAt: now,
           };
           
@@ -189,7 +195,7 @@ exports.handler = async (event) => {
           const alumniExpressionAttributeNames = {};
           const alumniExpressionAttributeValues = {};
           
-          const alumniUpdateFields = ['skills', 'aspirations', 'parsed_resume', 'projects', 'experiences', 'achievements', 'resume_url'];
+          const alumniUpdateFields = ['skills', 'aspirations', 'bio', 'major', 'grad_year', 'relevant_coursework', 'parsed_resume', 'projects', 'experiences', 'achievements', 'resume_url', 'linkedin_url', 'github_url'];
           alumniUpdateFields.forEach((field, index) => {
             if (body.profileData && body.profileData[field] !== undefined) {
               const nameKey = `#attr${index}`;
