@@ -256,10 +256,56 @@ const getSimilarStudentsForMentor = async (req, res) => {
   }
 };
 
+/**
+ * GET /api/matching/student/:studentId/similar-mentors
+ * Get similar mentors for a specific student, ordered by similarity score
+ */
+const getSimilarMentorsForStudent = async (req, res) => {
+  console.log(`-> triggered endpoint GET /api/matching/student/:studentId/similar-mentors`);
+  try {
+    const { studentId } = req.params;
+
+    if (!studentId || studentId.trim() === '') {
+      console.log('-> finished endpoint execution GET /api/matching/student/:studentId/similar-mentors');
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid student ID',
+        error: 'Student ID must be a valid UUID string',
+      });
+    }
+
+    const mentorScores = await matchingService.findSimilarMentorsForStudent(studentId);
+
+    res.status(200).json({
+      success: true,
+      message: 'Similar mentors retrieved successfully',
+      data: mentorScores,
+      count: mentorScores.length,
+    });
+    console.log('-> finished endpoint execution GET /api/matching/student/:studentId/similar-mentors');
+  } catch (error) {
+    console.log('-> finished endpoint execution GET /api/matching/student/:studentId/similar-mentors');
+    console.error('Get similar mentors for student error:', error);
+    if (error.message === 'Student not found') {
+      return res.status(404).json({
+        success: false,
+        message: 'Student not found',
+        error: error.message,
+      });
+    }
+    res.status(500).json({
+      success: false,
+      message: 'Failed to retrieve similar mentors',
+      error: error.message || 'An error occurred',
+    });
+  }
+};
+
 module.exports = {
   getAllMentors,
   getAllMentees,
   performMatching,
-  getSimilarStudentsForMentor
+  getSimilarStudentsForMentor,
+  getSimilarMentorsForStudent
 };
 
