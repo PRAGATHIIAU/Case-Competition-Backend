@@ -5,6 +5,7 @@ const authRoutes = require('./auth.routes');
 const eventRoutes = require('./event.routes');
 const studentRoutes = require('./student.routes');
 const adminRoutes = require('./admin.routes');
+const facultyRoutes = require('./faculty.routes');
 
 // Routes
 router.get('/', helloController.getHello);
@@ -17,6 +18,7 @@ router.use('/api/events', eventRoutes);
 
 router.use('/api/students', studentRoutes);
 router.use('/admin', adminRoutes);
+router.use('/faculty', facultyRoutes);
 
 module.exports = router;
 

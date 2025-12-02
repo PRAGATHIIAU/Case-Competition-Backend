@@ -14,7 +14,7 @@ const CREATE_TABLE_QUERY = `
     password_hash VARCHAR(255) NOT NULL,
     first_name VARCHAR(255) NOT NULL,
     last_name VARCHAR(255) NOT NULL,
-    role VARCHAR(50) NOT NULL DEFAULT 'admin',
+    role VARCHAR(50) NOT NULL DEFAULT 'admin' CHECK (role IN ('admin', 'faculty')),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
   );
@@ -42,8 +42,14 @@ const AdminModel = {
   },
 };
 
+const ADMIN_ROLES = {
+  ADMIN: 'admin',
+  FACULTY: 'faculty',
+};
+
 module.exports = {
   AdminModel,
   CREATE_TABLE_QUERY,
+  ADMIN_ROLES,
 };
 
