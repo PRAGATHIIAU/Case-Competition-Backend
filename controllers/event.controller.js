@@ -33,6 +33,33 @@ const getAllEvents = async (req, res) => {
 };
 
 /**
+ * GET /events/competitions
+ * Get all events with type="competition"
+ */
+const getCompetitions = async (req, res) => {
+  console.log('-> triggered endpoint GET /api/events/competitions');
+  try {
+    const competitions = await eventService.getCompetitions();
+
+    res.status(200).json({
+      success: true,
+      message: 'Competitions retrieved successfully',
+      data: competitions,
+      count: competitions.length,
+    });
+    console.log('-> finished endpoint execution GET /api/events/competitions');
+  } catch (error) {
+    console.log('-> finished endpoint execution GET /api/events/competitions');
+    console.error('Get competitions error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to retrieve competitions',
+      error: error.message || 'An error occurred while retrieving competitions',
+    });
+  }
+};
+
+/**
  * GET /events/:id
  * Get event by ID
  */
@@ -469,6 +496,7 @@ const getLeaderboard = async (req, res) => {
 
 module.exports = {
   getAllEvents,
+  getCompetitions,
   getEventById,
   createEvent,
   updateEvent,

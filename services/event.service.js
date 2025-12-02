@@ -20,6 +20,18 @@ const getAllEvents = async () => {
 };
 
 /**
+ * Get all events with type="competition"
+ * @returns {Promise<Array>} Array of competition event objects
+ */
+const getCompetitions = async () => {
+  try {
+    return await eventRepository.getCompetitions();
+  } catch (error) {
+    throw error;
+  }
+};
+
+/**
  * Get event by ID
  * @param {string} eventId - Event ID
  * @returns {Promise<Object>} Event object
@@ -558,6 +570,7 @@ const getLeaderboard = async (eventId) => {
 
 module.exports = {
   getAllEvents,
+  getCompetitions,
   getEventById,
   createEvent,
   updateEvent,

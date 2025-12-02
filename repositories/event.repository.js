@@ -91,6 +91,20 @@ const getAllEvents = async () => {
 };
 
 /**
+ * Get all events with type="competition"
+ * @returns {Promise<Array>} Array of competition event objects
+ */
+const getCompetitions = async () => {
+  try {
+    const response = await callDynamoDBLambda('getCompetitions');
+    return response.data || [];
+  } catch (error) {
+    console.error('Error getting competitions:', error);
+    throw new Error(`Failed to retrieve competitions: ${error.message}`);
+  }
+};
+
+/**
  * Get event by ID
  * @param {string} eventId - Event ID
  * @returns {Promise<Object|null>} Event object or null if not found
@@ -202,6 +216,7 @@ const updateScores = async (eventId, scores) => {
 
 module.exports = {
   getAllEvents,
+  getCompetitions,
   getEventById,
   createEvent,
   updateEvent,

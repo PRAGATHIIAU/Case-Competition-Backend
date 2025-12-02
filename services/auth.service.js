@@ -391,6 +391,8 @@ const signup = async (userData, file) => {
       relevant_coursework: [],
       linkedin_url: null,
       github_url: null,
+      contact: null,
+      location: null,
     };
     
     let resumeUrl = null;
@@ -414,6 +416,8 @@ const signup = async (userData, file) => {
           hasAspirations: !!parsedResumeData.aspirations,
           linkedinUrl: parsedResumeData.linkedin_url || 'Not found',
           githubUrl: parsedResumeData.github_url || 'Not found',
+          contact: parsedResumeData.contact || 'Not found',
+          location: parsedResumeData.location || 'Not found',
         });
       } catch (parseError) {
         console.error('⚠️ Failed to parse resume, continuing with signup:', {
@@ -473,18 +477,34 @@ const signup = async (userData, file) => {
       projects,
       experiences,
       achievements,
+      location,
     } = userData;
 
     // Merge LinkedIn URL - manual input takes precedence over parsed
     // Note: LinkedIn URL will be stored in DynamoDB profile (users table doesn't have linkedin_url field)
     const mergedLinkedInUrl = linkedin_url?.trim() || parsedResumeData.linkedin_url || null;
 
+    // Merge contact - manual input takes precedence over parsed (stored in RDS)
+    const mergedContact = (contact !== undefined && contact !== null && contact?.trim())
+      ? contact.trim()
+      : (parsedResumeData.contact || null);
+
+    // Log contact being stored
+    console.log('📝 Storing contact in RDS:', {
+      hasContact: !!mergedContact,
+      contact: mergedContact || 'Not provided',
+      source: {
+        contactFromResume: !!parsedResumeData.contact,
+        contactFromManual: contact !== undefined && contact !== null && contact?.trim(),
+      },
+    });
+
     // Prepare RDS data (atomic fields + willingness flags)
     const rdsData = {
       email,
       name,
       password: hashedPassword,
-      contact,
+      contact: mergedContact,
       willing_to_be_mentor,
       mentor_capacity,
       willing_to_be_judge,
@@ -532,14 +552,29 @@ const signup = async (userData, file) => {
       ? (Array.isArray(achievements) ? achievements : (typeof achievements === 'string' ? JSON.parse(achievements) : []))
       : (parsedResumeData.achievements || []);
 
+    // Merge location - manual input takes precedence over parsed (stored in DynamoDB)
+    const mergedLocation = (location !== undefined && location !== null && location?.trim())
+      ? location.trim()
+      : (parsedResumeData.location || null);
+
+    // Log location being stored
+    console.log('📝 Storing location in DynamoDB:', {
+      hasLocation: !!mergedLocation,
+      location: mergedLocation || 'Not provided',
+      source: {
+        locationFromResume: !!parsedResumeData.location,
+        locationFromManual: location !== undefined && location !== null && location?.trim(),
+      },
+    });
+
     // Prepare DynamoDB profile data
     // Include parsed resume data structure for reference
-    // IMPORTANT: Include linkedin_url and github_url in the check so profile is saved even if they're the only fields
+    // IMPORTANT: Include linkedin_url, github_url, and location in the check so profile is saved even if they're the only fields
     const hasProfileData = mergedSkills.length > 0 || mergedAspirations || mergedBio ||
                            mergedProjects.length > 0 || mergedExperiences.length > 0 || 
                            mergedAchievements.length > 0 || mergedMajor || mergedGradYear ||
                            mergedRelevantCoursework.length > 0 || parsed_resume || resumeUrl ||
-                           mergedLinkedInUrl || parsedResumeData.github_url;
+                           mergedLinkedInUrl || parsedResumeData.github_url || mergedLocation;
 
     // Track if profile save was successful
     let profileSaveSuccess = false;
@@ -580,6 +615,7 @@ const signup = async (userData, file) => {
         resume_url: resumeUrl || null,
         linkedin_url: mergedLinkedInUrl, // Store LinkedIn URL in DynamoDB profile
         github_url: parsedResumeData.github_url || null, // Store GitHub URL in DynamoDB profile
+        location: mergedLocation, // Store location in DynamoDB profile
       };
       
       console.log('📝 Saving profile data to DynamoDB:', {
@@ -612,7 +648,14 @@ const signup = async (userData, file) => {
 
       // Save profile to DynamoDB
       try {
-        console.log('💾 Attempting to save profile to DynamoDB with LinkedIn URL:', mergedLinkedInUrl);
+        console.log('💾 Attempting to save profile to DynamoDB:', {
+          userId: newUser.id,
+          hasLinkedInUrl: !!mergedLinkedInUrl,
+          linkedInUrl: mergedLinkedInUrl,
+          hasLocation: !!mergedLocation,
+          location: mergedLocation,
+          profileDataKeys: Object.keys(profileData),
+        });
         await saveAlumniProfile(newUser.id, profileData);
         profileSaveSuccess = true;
         console.log('✅ Profile saved successfully for user:', newUser.id);
@@ -641,6 +684,8 @@ const signup = async (userData, file) => {
         hasLinkedInUrl: !!mergedLinkedInUrl,
         linkedInUrl: mergedLinkedInUrl,
         hasGitHubUrl: !!parsedResumeData.github_url,
+        hasLocation: !!mergedLocation,
+        location: mergedLocation,
       });
     }
 
@@ -686,6 +731,18 @@ const signup = async (userData, file) => {
     if (mergedGradYear !== null && mergedGradYear !== undefined && (!mergedUser.grad_year || mergedUser.grad_year === null || mergedUser.grad_year === undefined)) {
       mergedUser.grad_year = mergedGradYear;
       console.log('⚠️ Graduation year not found in DynamoDB, using extracted value (fallback):', mergedGradYear);
+    }
+    
+    // Fallback for contact (from RDS, but ensure it's in response)
+    if (mergedContact && (!mergedUser.contact || mergedUser.contact === null || mergedUser.contact === '')) {
+      mergedUser.contact = mergedContact;
+      console.log('⚠️ Contact not found in RDS, using extracted value (fallback):', mergedContact);
+    }
+    
+    // Fallback for location (from DynamoDB, but ensure it's in response)
+    if (mergedLocation && (!mergedUser.location || mergedUser.location === null || mergedUser.location === '')) {
+      mergedUser.location = mergedLocation;
+      console.log('⚠️ Location not found in DynamoDB, using extracted value (fallback):', mergedLocation);
     }
     
     if (mergedRelevantCoursework && Array.isArray(mergedRelevantCoursework) && mergedRelevantCoursework.length > 0 && 
@@ -791,6 +848,7 @@ const getUserWithProfile = async (userId) => {
         resume_url: profile.resume_url || null,
         linkedin_url: profile.linkedin_url || null,
         github_url: profile.github_url || null,
+        location: profile.location || null,
       };
     } else {
       // No profile data, return only RDS data with empty profile fields
@@ -807,6 +865,9 @@ const getUserWithProfile = async (userId) => {
         experiences: [],
         achievements: [],
         resume_url: null,
+        linkedin_url: null,
+        github_url: null,
+        location: null,
         linkedin_url: null,
         github_url: null,
       };

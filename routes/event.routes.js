@@ -6,6 +6,7 @@ const { authenticateAdmin } = require('../middleware/adminAuth');
 /**
  * Event Routes
  * GET /api/events - Get all events
+ * GET /api/events/competitions - Get all events with type="competition"
  * GET /api/events/:id - Get event by ID
  * GET /api/events/judged-by/:userId - Get all events where user is assigned as judge
  * GET /api/events/judged-by/:userId/rubrics - Get all rubrics for events where user is a judge
@@ -21,6 +22,9 @@ const { authenticateAdmin } = require('../middleware/adminAuth');
 
 // GET /api/events
 router.get('/', eventController.getAllEvents);
+
+// GET /api/events/competitions (must come before /:id route)
+router.get('/competitions', eventController.getCompetitions);
 
 // POST /api/events (Admin only - requires authentication)
 router.post('/', authenticateAdmin, eventController.createEvent);
