@@ -6,6 +6,7 @@ const eventRoutes = require('./event.routes');
 const studentRoutes = require('./student.routes');
 const matchingRoutes = require('./matching.routes');
 const adminRoutes = require('./admin.routes');
+const facultyRoutes = require('./faculty.routes');
 const connectionRequestRoutes = require('./connectionRequest.routes');
 const facultyRoutes = require('./faculty.routes');
 
