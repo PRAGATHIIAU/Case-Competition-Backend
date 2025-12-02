@@ -2,6 +2,7 @@ const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const adminRepository = require('../repositories/admin.repository');
 const eventRepository = require('../repositories/event.repository');
+const { ADMIN_ROLES } = require('../models/admin.model');
 
 // Try to import student, alumni, and industry user repositories
 // These should exist if CRUD is already implemented
@@ -67,7 +68,7 @@ const login = async (email, password) => {
 
     // Generate JWT token
     const token = jwt.sign(
-      { adminId: admin.id, email: admin.email, role: admin.role },
+      { id: admin.id, email: admin.email, role: admin.role },
       JWT_SECRET,
       { expiresIn: '7d' }
     );
@@ -208,5 +209,25 @@ module.exports = {
   getAllAlumni,
   getAllEvents,
   updateEventStatus,
+  ADMIN_ROLES,
+  /**
+   * Update role for an admin account
+   * @param {number} adminId
+   * @param {'admin'|'faculty'} role
+   * @returns {Promise<Object>}
+   */
+  updateAdminRole: async (adminId, role) => {
+    const normalizedRole = typeof role === 'string' ? role.trim().toLowerCase() : '';
+    if (!Object.values(ADMIN_ROLES).includes(normalizedRole)) {
+      throw new Error('Invalid role');
+    }
+
+    const updatedAdmin = await adminRepository.updateAdminRole(adminId, normalizedRole);
+    if (!updatedAdmin) {
+      throw new Error('Admin not found');
+    }
+
+    return updatedAdmin;
+  },
 };
 

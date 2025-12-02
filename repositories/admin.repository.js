@@ -49,5 +49,27 @@ const getAdminById = async (id) => {
 module.exports = {
   getAdminByEmail,
   getAdminById,
+  /**
+   * Update admin role
+   * @param {number} id
+   * @param {'admin'|'faculty'} role
+   * @returns {Promise<Object|null>}
+   */
+  updateAdminRole: async (id, role) => {
+    const query = `
+      UPDATE ${AdminModel.TABLE_NAME}
+      SET role = $1,
+          updated_at = CURRENT_TIMESTAMP
+      WHERE id = $2
+      RETURNING id, email, first_name, last_name, role, created_at, updated_at
+    `;
+
+    try {
+      const result = await pool.query(query, [role, id]);
+      return result.rows[0] || null;
+    } catch (error) {
+      throw error;
+    }
+  },
 };
 

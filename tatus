@@ -217,4 +217,453 @@
 [32m+[m[32m}[m
 [32m+[m[32m```[m
 [32m+[m
-[32m+[m[32m**
+[32m+[m[32m**PowerShell:**[m
+[32m+[m[32m```powershell[m
+[32m+[m[32mInvoke-RestMethod -Uri "http://localhost:3000/api/events" -Method GET | ConvertTo-Json[m
+[32m+[m[32m```[m
+[32m+[m
+[32m+[m[32m---[m
+[32m+[m
+[32m+[m[32m### 2. GET /api/events/:id[m
+[32m+[m[32m**Purpose:** Get a specific event by ID[m
+[32m+[m
+[32m+[m[32m**Response:**[m
+[32m+[m[32m```json[m
+[32m+[m[32m{[m
+[32m+[m[32m  "success": true,[m
+[32m+[m[32m  "message": "Event retrieved successfully",[m
+[32m+[m[32m  "data": {[m
+[32m+[m[32m    "eventId": "EVT-1234567890-abc123",[m
+[32m+[m[32m    "eventInfo": {[m
+[32m+[m[32m      "name": "Case Competition 2024",[m
+[32m+[m[32m      "description": "Annual case competition event"[m
+[32m+[m[32m    },[m
+[32m+[m[32m    "teams": [],[m
+[32m+[m[32m    "rubrics": [],[m
+[32m+[m[32m    "judges": [],[m
+[32m+[m[32m    "scores": [],[m
+[32m+[m[32m    "createdAt": "2024-01-01T00:00:00.000Z",[m
+[32m+[m[32m    "updatedAt": "2024-01-01T00:00:00.000Z"[m
+[32m+[m[32m  }[m
+[32m+[m[32m}[m
+[32m+[m[32m```[m
+[32m+[m
+[32m+[m[32m**PowerShell:**[m
+[32m+[m[32m```powershell[m
+[32m+[m[32mInvoke-RestMethod -Uri "http://localhost:3000/api/events/EVT-1234567890-abc123" -Method GET | ConvertTo-Json[m
+[32m+[m[32m```[m
+[32m+[m
+[32m+[m[32m---[m
+[32m+[m
+[32m+[m[32m### 3. POST /api/events[m
+[32m+[m[32m**Purpose:** Create a new event[m
+[32m+[m
+[32m+[m[32m**Request Body Structure:**[m
+[32m+[m[32m```json[m
+[32m+[m[32m{[m
+[32m+[m[32m  "eventInfo": {[m
+[32m+[m[32m    "name": "Case Competition 2024",[m
+[32m+[m[32m    "description": "Annual case competition event",[m
+[32m+[m[32m    "date": "2024-04-15T09:00:00Z"[m
+[32m+[m[32m  },[m
+[32m+[m[32m  "teams": [[m
+[32m+[m[32m    {[m
+[32m+[m[32m      "teamId": "TEAM-001",[m
+[32m+[m[32m      "teamName": "Team Alpha",[m
+[32m+[m[32m      "members": ["STU-001", "STU-002"][m
+[32m+[m[32m    }[m
+[32m+[m[32m  ],[m
+[32m+[m[32m  "rubrics": [[m
+[32m+[m[32m    {[m
+[32m+[m[32m      "rubricId": "RUB-001",[m
+[32m+[m[32m      "name": "Presentation Quality",[m
+[32m+[m[32m      "maxScore": 25,[m
+[32m+[m[32m      "weight": 0.3[m
+[32m+[m[32m    },[m
+[32m+[m[32m    {[m
+[32m+[m[32m      "rubricId": "RUB-002",[m
+[32m+[m[32m      "name": "Solution Quality",[m
+[32m+[m[32m      "maxScore": 50,[m
+[32m+[m[32m      "weight": 0.5[m
+[32m+[m[32m    }[m
+[32m+[m[32m  ],[m
+[32m+[m[32m  "judges": [[m
+[32m+[m[32m    {[m
+[32m+[m[32m      "judgeId": "JUDGE-001",[m
+[32m+[m[32m      "status": "approved"[m
+[32m+[m[32m    }[m
+[32m+[m[32m  ],[m
+[32m+[m[32m  "scores": [][m
+[32m+[m[32m}[m
+[32m+[m[32m```[m
+[32m+[m
+[32m+[m[32m**Response:**[m
+[32m+[m[32m```json[m
+[32m+[m[32m{[m
+[32m+[m[32m  "success": true,[m
+[32m+[m[32m  "message": "Event created successfully",[m
+[32m+[m[32m  "data": {[m
+[32m+[m[32m    "eventId": "EVT-1234567890-abc123",[m
+[32m+[m[32m    "eventInfo": {[m
+[32m+[m[32m      "name": "Case Competition 2024",[m
+[32m+[m[32m      "description": "Annual case competition event"[m
+[32m+[m[32m    },[m
+[32m+[m[32m    "teams": [],[m
+[32m+[m[32m    "rubrics": [],[m
+[32m+[m[32m    "judges": [],[m
+[32m+[m[32m    "scores": [],[m
+[32m+[m[32m    "createdAt": "2024-01-01T00:00:00.000Z",[m
+[32m+[m[32m    "updatedAt": "2024-01-01T00:00:00.000Z"[m
+[32m+[m[32m  }[m
+[32m+[m[32m}[m
+[32m+[m[32m```[m
+[32m+[m
+[32m+[m[32m**PowerShell:**[m
+[32m+[m[32m```powershell[m
+[32m+[m[32m$eventBody = @{[m
+[32m+[m[32m    eventInfo = @{[m
+[32m+[m[32m        name = "Case Competition 2024"[m
+[32m+[m[32m        description = "Annual case competition event"[m
+[32m+[m[32m        date = "2024-04-15T09:00:00Z"[m
+[32m+[m[32m    }[m
+[32m+[m[32m    teams = @()[m
+[32m+[m[32m    rubrics = @([m
+[32m+[m[32m        @{[m
+[32m+[m[32m            rubricId = "RUB-001"[m
+[32m+[m[32m            name = "Presentation Quality"[m
+[32m+[m[32m            maxScore = 25[m
+[32m+[m[32m            weight = 0.3[m
+[32m+[m[32m        }[m
+[32m+[m[32m    )[m
+[32m+[m[32m    judges = @()[m
+[32m+[m[32m    scores = @()[m
+[32m+[m[32m} | ConvertTo-Json -Depth 10[m
+[32m+[m
+[32m+[m[32mInvoke-RestMethod -Uri "http://localhost:3000/api/events" -Method POST -Body $eventBody -ContentType "application/json" | ConvertTo-Json[m
+[32m+[m[32m```[m
+[32m+[m
+[32m+[m[32m---[m
+[32m+[m
+[32m+[m[32m### 4. PUT /api/events/:id[m
+[32m+[m[32m**Purpose:** Update an existing event[m
+[32m+[m
+[32m+[m[32m**Request:** (You can update any fields)[m
+[32m+[m[32m```json[m
+[32m+[m[32m{[m
+[32m+[m[32m  "eventInfo": {[m
+[32m+[m[32m    "name": "Updated Event Name",[m
+[32m+[m[32m    "description": "Updated description"[m
+[32m+[m[32m  }[m
+[32m+[m[32m}[m
+[32m+[m[32m```[m
+[32m+[m
+[32m+[m[32m**Response:**[m
+[32m+[m[32m```json[m
+[32m+[m[32m{[m
+[32m+[m[32m  "success": true,[m
+[32m+[m[32m  "message": "Event updated successfully",[m
+[32m+[m[32m  "data": {[m
+[32m+[m[32m    "eventId": "EVT-1234567890-abc123",[m
+[32m+[m[32m    "eventInfo": {[m
+[32m+[m[32m      "name": "Updated Event Name",[m
+[32m+[m[32m      "description": "Updated description"[m
+[32m+[m[32m    },[m
+[32m+[m[32m    "updatedAt": "2024-01-02T00:00:00.000Z"[m
+[32m+[m[32m  }[m
+[32m+[m[32m}[m
+[32m+[m[32m```[m
+[32m+[m
+[32m+[m[32m**PowerShell:**[m
+[32m+[m[32m```powershell[m
+[32m+[m[32m$updateBody = @{[m
+[32m+[m[32m    eventInfo = @{[m
+[32m+[m[32m        name = "Updated Event Name"[m
+[32m+[m[32m        description = "Updated description"[m
+[32m+[m[32m    }[m
+[32m+[m[32m} | ConvertTo-Json -Depth 10[m
+[32m+[m
+[32m+[m[32mInvoke-RestMethod -Uri "http://localhost:3000/api/events/EVT-1234567890-abc123" -Method PUT -Body $updateBody -ContentType "application/json" | ConvertTo-Json[m
+[32m+[m[32m```[m
+[32m+[m
+[32m+[m[32m---[m
+[32m+[m
+[32m+[m[32m### 5. DELETE /api/events/:id[m
+[32m+[m[32m**Purpose:** Delete an event[m
+[32m+[m
+[32m+[m[32m**Response:**[m
+[32m+[m[32m```json[m
+[32m+[m[32m{[m
+[32m+[m[32m  "success": true,[m
+[32m+[m[32m  "message": "Event deleted successfully"[m
+[32m+[m[32m}[m
+[32m+[m[32m```[m
+[32m+[m
+[32m+[m[32m**PowerShell:**[m
+[32m+[m[32m```powershell[m
+[32m+[m[32mInvoke-RestMethod -Uri "http://localhost:3000/api/events/EVT-1234567890-abc123" -Method DELETE | ConvertTo-Json[m
+[32m+[m[32m```[m
+[32m+[m
+[32m+[m[32m---[m
+[32m+[m
+[32m+[m[32m### 6. GET /api/events/:eventId/teams[m
+[32m+[m[32m**Purpose:** Get all teams for an event with their total scores[m
+[32m+[m
+[32m+[m[32m**Response:**[m
+[32m+[m[32m```json[m
+[32m+[m[32m{[m
+[32m+[m[32m  "success": true,[m
+[32m+[m[32m  "message": "Teams retrieved successfully",[m
+[32m+[m[32m  "data": [[m
+[32m+[m[32m    {[m
+[32m+[m[32m      "teamId": "TEAM-001",[m
+[32m+[m[32m      "teamName": "Team Alpha",[m
+[32m+[m[32m      "members": ["STU-001", "STU-002"],[m
+[32m+[m[32m      "totalScore": 85[m
+[32m+[m[32m    }[m
+[32m+[m[32m  ],[m
+[32m+[m[32m  "count": 1[m
+[32m+[m[32m}[m
+[32m+[m[32m```[m
+[32m+[m
+[32m+[m[32m**PowerShell:**[m
+[32m+[m[32m```powershell[m
+[32m+[m[32mInvoke-RestMethod -Uri "http://localhost:3000/api/events/EVT-1234567890-abc123/teams" -Method GET | ConvertTo-Json[m
+[32m+[m[32m```[m
+[32m+[m
+[32m+[m[32m---[m
+[32m+[m
+[32m+[m[32m### 7. GET /api/events/:eventId/rubrics[m
+[32m+[m[32m**Purpose:** Get all rubrics for an event[m
+[32m+[m
+[32m+[m[32m**Response:**[m
+[32m+[m[32m```json[m
+[32m+[m[32m{[m
+[32m+[m[32m  "success": true,[m
+[32m+[m[32m  "message": "Rubrics retrieved successfully",[m
+[32m+[m[32m  "data": [[m
+[32m+[m[32m    {[m
+[32m+[m[32m      "rubricId": "RUB-001",[m
+[32m+[m[32m      "name": "Presentation Quality",[m
+[32m+[m[32m      "maxScore": 25,[m
+[32m+[m[32m      "weight": 0.3[m
+[32m+[m[32m    },[m
+[32m+[m[32m    {[m
+[32m+[m[32m      "rubricId": "RUB-002",[m
+[32m+[m[32m      "name": "Solution Quality",[m
+[32m+[m[32m      "maxScore": 50,[m
+[32m+[m[32m      "weight": 0.5[m
+[32m+[m[32m    }[m
+[32m+[m[32m  ],[m
+[32m+[m[32m  "count": 2[m
+[32m+[m[32m}[m
+[32m+[m[32m```[m
+[32m+[m
+[32m+[m[32m**PowerShell:**[m
+[32m+[m[32m```powershell[m
+[32m+[m[32mInvoke-RestMethod -Uri "http://localhost:3000/api/events/EVT-1234567890-abc123/rubrics" -Method GET | ConvertTo-Json[m
+[32m+[m[32m```[m
+[32m+[m
+[32m+[m[32m---[m
+[32m+[m
+[32m+[m[32m### 8. POST /api/events/:eventId/score[m
+[32m+[m[32m**Purpose:** Submit scores for a team (judges only)[m
+[32m+[m
+[32m+[m[32m**Request:**[m
+[32m+[m[32m```json[m
+[32m+[m[32m{[m
+[32m+[m[32m  "judgeId": "JUDGE-001",[m
+[32m+[m[32m  "teamId": "TEAM-001",[m
+[32m+[m[32m  "scores": [[m
+[32m+[m[32m    {[m
+[32m+[m[32m      "rubricId": "RUB-001",[m
+[32m+[m[32m      "score": 20[m
+[32m+[m[32m    },[m
+[32m+[m[32m    {[m
+[32m+[m[32m      "rubricId": "RUB-002",[m
+[32m+[m[32m      "score": 45[m
+[32m+[m[32m    }[m
+[32m+[m[32m  ][m
+[32m+[m[32m}[m
+[32m+[m[32m```[m
+[32m+[m
+[32m+[m[32m**Response:**[m
+[32m+[m[32m```json[m
+[32m+[m[32m{[m
+[32m+[m[32m  "success": true,[m
+[32m+[m[32m  "message": "Scores submitted successfully",[m
+[32m+[m[32m  "data": {[m
+[32m+[m[32m    "eventId": "EVT-1234567890-abc123",[m
+[32m+[m[32m    "scores": [[m
+[32m+[m[32m      {[m
+[32m+[m[32m        "judgeId": "JUDGE-001",[m
+[32m+[m[32m        "teamId": "TEAM-001",[m
+[32m+[m[32m        "rubricId": "RUB-001",[m
+[32m+[m[32m        "score": 20,[m
+[32m+[m[32m        "timestamp": "2024-01-01T12:00:00.000Z"[m
+[32m+[m[32m      }[m
+[32m+[m[32m    ][m
+[32m+[m[32m  }[m
+[32m+[m[32m}[m
+[32m+[m[32m```[m
+[32m+[m
+[32m+[m[32m**PowerShell:**[m
+[32m+[m[32m```powershell[m
+[32m+[m[32m$scoreBody = @{[m
+[32m+[m[32m    judgeId = "JUDGE-001"[m
+[32m+[m[32m    teamId = "TEAM-001"[m
+[32m+[m[32m    scores = @([m
+[32m+[m[32m        @{[m
+[32m+[m[32m            rubricId = "RUB-001"[m
+[32m+[m[32m            score = 20[m
+[32m+[m[32m        },[m
+[32m+[m[32m        @{[m
+[32m+[m[32m            rubricId = "RUB-002"[m
+[32m+[m[32m            score = 45[m
+[32m+[m[32m        }[m
+[32m+[m[32m    )[m
+[32m+[m[32m} | ConvertTo-Json -Depth 10[m
+[32m+[m
+[32m+[m[32mInvoke-RestMethod -Uri "http://localhost:3000/api/events/EVT-1234567890-abc123/score" -Method POST -Body $scoreBody -ContentType "application/json" | ConvertTo-Json[m
+[32m+[m[32m```[m
+[32m+[m
+[32m+[m[32m---[m
+[32m+[m
+[32m+[m[32m### 9. GET /api/events/:eventId/leaderboard[m
+[32m+[m[32m**Purpose:** Get ranked leaderboard with final weighted scores[m
+[32m+[m
+[32m+[m[32m**Response:**[m
+[32m+[m[32m```json[m
+[32m+[m[32m{[m
+[32m+[m[32m  "success": true,[m
+[32m+[m[32m  "message": "Leaderboard retrieved successfully",[m
+[32m+[m[32m  "data": [[m
+[32m+[m[32m    {[m
+[32m+[m[32m      "rank": 1,[m
+[32m+[m[32m      "teamId": "TEAM-001",[m
+[32m+[m[32m      "teamName": "Team Alpha",[m
+[32m+[m[32m      "members": ["STU-001", "STU-002"],[m
+[32m+[m[32m      "finalScore": 87.5[m
+[32m+[m[32m    },[m
+[32m+[m[32m    {[m
+[32m+[m[32m      "rank": 2,[m
+[32m+[m[32m      "teamId": "TEAM-002",[m
+[32m+[m[32m      "teamName": "Team Beta",[m
+[32m+[m[32m      "members": ["STU-003", "STU-004"],[m
+[32m+[m[32m      "finalScore": 82.3[m
+[32m+[m[32m    }[m
+[32m+[m[32m  ],[m
+[32m+[m[32m  "count": 2[m
+[32m+[m[32m}[m
+[32m+[m[32m```[m
+[32m+[m
+[32m+[m[32m**PowerShell:**[m
+[32m+[m[32m```powershell[m
+[32m+[m[32mInvoke-RestMethod -Uri "http://localhost:3000/api/events/EVT-1234567890-abc123/leaderboard" -Method GET | ConvertTo-Json[m
+[32m+[m[32m```[m
+[32m+[m
+[32m+[m[32m---[m
+[32m+[m
+[32m+[m[32m### 10. POST /api/events/:id/register[m
+[32m+[m[32m**Purpose:** Register alumni as judge for an event (sends email to admin)[m
+[32m+[m
+[32m+[m[32m**Request:**[m
+[32m+[m[32m```json[m
+[32m+[m[32m{[m
+[32m+[m[32m  "alumniEmail": "alumni@example.com",[m
+[32m+[m[32m  "alumniName": "John Doe",[m
+[32m+[m[32m  "preferredDateTime": "2024-03-15T09:00:00Z",[m
+[32m+[m[32m  "preferredLocation": "Main Hall"[m
+[32m+[m[32m}[m
+[32m+[m[32m```[m
+[32m+[m
+[32m+[m[32m**Response:**[m
+[32m+[m[32m```json[m
+[32m+[m[32m{[m
+[32m+[m[32m  "success": true,[m
+[32m+[m[32m  "message": "Registration successful. Admin has been notified.",[m
+[32m+[m[32m  "data": {[m
+[32m+[m[32m    "eventId": "EVT-1234567890-abc123",[m
+[32m+[m[32m    "eventTitle": "Case Competition 2024"[m
+[32m+[m[32m  }[m
+[32m+[m[32m}[m
+[32m+[m[32m```[m
+[32m+[m
+[32m+[m[32m**PowerShell:**[m
+[32m+[m[32m```powershell[m
+[32m+[m[32m$registerBody = @{[m
+[32m+[m[32m    alumniEmail = "alumni@example.com"[m
+[32m+[m[32m    alumniName = "John Doe"[m
+[32m+[m[32m    preferredDateTime = "2024-03-15T09:00:00Z"[m
+[32m+[m[32m    preferredLocation = "Main Hall"[m
+[32m+[m[32m} | ConvertTo-Json[m
+[32m+[m
+[32m+[m[32mInvoke-RestMethod -Uri "http://localhost:3000/api/events/EVT-1234567890-abc123/register" -Method POST -Body $registerBody -ContentType "application/json" | ConvertTo-Json[m
+[32m+[m[32m```[m
+[32m+[m
+[32m+[m[32m---[m
+[32m+[m
+[32m+[m[32m## 📊 DATA STRUCTURES[m
+[32m+[m
+[32m+[m[32m### Event Object Structure[m
+[32m+[m[32m```json[m
+[32m+[m[32m{[m
+[32m+[m[32m  "eventId": "string (auto-generated: EVT-timestamp-random)",[m
+[32m+[m[32m  "eventInfo": {[m
+[32m+[m[32m    "name": "string (required)",[m
+[32m+[m[32m    "description": "string (required)",[m
+[32m+[m[32m    "date": "string (ISO 8601, optional)"[m
+[32m+[m[32m  },[m
+[32m+[m[32m  "teams": [[m
+[32m+[m[32m    {[m
+[32m+[m[32m      "teamId": "string (required)",[m
+[32m+[m[32m      "teamName": "string (required)",[m
+[32m+[m[32m      "members": ["string array of student IDs"][m
+[32m+[m[32m    }[m
+[32m+[m[32m  ],[m
+[32m+[m[32m  "rubrics": [[m
+[32m+[m[32m    {[m
+[32m+[m[32m      "rubricId": "string (required)",[m
+[32m+[m[32m      "name": "string (required)",[m
+[32m+[m[32m      "maxScore": "number (required, > 0)",[m
+[32m+[m[32m      "weight": "number (required, >= 0)"[m
+[32m+[m[32m    }[m
+[32m+[m[32m  ],[m
+[32m+[m[32m  "judges": [[m
+[32m+[m[32m    {[m
+[32m+[m[32m      "judgeId": "string (required)",[m
+[32m+[m[32m      "status": "string (required: 'approved' | 'pending')"[m
+[32m+[m[32m    }[m
+[32m+[m[32m  ],[m
+[32m+[m[32m  "scores": [[m
+[32m+[m[32m    {[m
+[32m+[m[32m      "judgeId": "string (required)",[m
+[32m+[m[32m      "teamId": "string (required)",[m
+[32m+[m[32m      "rubricId": "string (required)",[m
+[32m+[m[32m      "score": "number (required, >= 0, <= maxScore)",[m
+[32m+[m[32m      "timestamp": "string (ISO 8601, auto-generated)"[m
+[32m+[m[32m    }[m
+[32m+[m[32m  ],[m
+[32m+[m[32m  "createdAt": "string (ISO 8601, auto-generated)",[m
+[32m+[m[32m  "updatedAt": "string (ISO 8601, auto-generated)"[m
+[32m+[m[32m}[m
+[32m+[m[32m```[m
+[32m+[m
+[32m+[m[32m---[m
+[32m+[m
+[32m+[m[32m## 🔄 COMPLETE WORKFLOW EXAMPLES[m
+[32m+[m
+[32m+[m[32m### Example 1: Create Event with Teams and Rubrics[m
+[32m+[m[32m```powershell[m
+[32m+[m[32m$eventBody = @{[m
+[32m+[m[32m    eventInfo = @{[m
+[32m+[m[32m        name = "Spring Case Competition 2024"[m
+[32m+[m[32m        description = "Annual spring case competition"[m
+[32m+[m[32m        date = "2024-04-15T09:00:00Z"[m
+[32m+[m[32m    }[m
+[32m+[m[32m    teams = @([m
+[32m+[m[32m        @{[m
+[32m+[m[32m            teamId = "TEAM-001"[m
+[32m+[m[32m            teamName = "Team Alpha"[m
+[32m+[m[32m            members = @("STU-001", "STU-002", "STU-003")[m
+[32m+[m[32m        },[m
+[32m+[m[32m        @

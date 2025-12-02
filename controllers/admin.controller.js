@@ -1,4 +1,5 @@
 const adminService = require('../services/admin.service');
+const { ADMIN_ROLES } = require('../models/admin.model');
 
 /**
  * Admin Controller
@@ -62,7 +63,7 @@ const login = async (req, res) => {
 const getProfile = async (req, res) => {
   console.log('-> triggered endpoint GET /admin/profile');
   try {
-    const adminId = req.admin?.adminId;
+    const adminId = req.admin?.id || req.admin?.adminId;
 
     if (!adminId) {
       console.log('-> finished endpoint execution GET /admin/profile');
@@ -236,6 +237,62 @@ const updateEventStatus = async (req, res) => {
   }
 };
 
+/**
+ * PUT /admin/:id/role
+ * Update an admin's role (admin -> faculty, etc.)
+ */
+const updateRole = async (req, res) => {
+  try {
+    if (req.admin?.role !== ADMIN_ROLES.ADMIN) {
+      return res.status(403).json({
+        success: false,
+        message: 'Only admins can modify roles',
+      });
+    }
+
+    const targetId = parseInt(req.params.id, 10);
+    if (Number.isNaN(targetId)) {
+      return res.status(400).json({
+        success: false,
+        message: 'A valid admin ID is required',
+      });
+    }
+
+    const { role } = req.body;
+    const normalizedRole = typeof role === 'string' ? role.trim().toLowerCase() : '';
+    if (!Object.values(ADMIN_ROLES).includes(normalizedRole)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid role',
+        error: `Role must be one of: ${Object.values(ADMIN_ROLES).join(', ')}`,
+      });
+    }
+
+    const updatedAdmin = await adminService.updateAdminRole(targetId, normalizedRole);
+
+    res.status(200).json({
+      success: true,
+      message: 'Admin role updated successfully',
+      data: updatedAdmin,
+    });
+  } catch (error) {
+    if (error.message === 'Admin not found') {
+      return res.status(404).json({
+        success: false,
+        message: 'Admin not found',
+        error: error.message,
+      });
+    }
+
+    console.error('Update admin role error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to update admin role',
+      error: error.message || 'An error occurred while updating admin role',
+    });
+  }
+};
+
 module.exports = {
   login,
   getProfile,
@@ -243,5 +300,6 @@ module.exports = {
   getAlumni,
   getEvents,
   updateEventStatus,
+  updateRole,
 };
 
