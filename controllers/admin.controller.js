@@ -11,11 +11,13 @@ const { ADMIN_ROLES } = require('../models/admin.model');
  * Authenticate admin and return token
  */
 const login = async (req, res) => {
+  console.log('-> triggered endpoint POST /admin/login');
   try {
     const { email, password } = req.body;
 
     // Validate input
     if (!email || !password) {
+      console.log('-> finished endpoint execution POST /admin/login');
       return res.status(400).json({
         success: false,
         message: 'Email and password are required',
@@ -31,9 +33,11 @@ const login = async (req, res) => {
       message: 'Login successful',
       data: result,
     });
+    console.log('-> finished endpoint execution POST /admin/login');
   } catch (error) {
     // Handle authentication errors
     if (error.message === 'Invalid email or password' || error.message === 'Email is required' || error.message === 'Password is required') {
+      console.log('-> finished endpoint execution POST /admin/login');
       return res.status(401).json({
         success: false,
         message: 'Invalid email or password',
@@ -42,6 +46,7 @@ const login = async (req, res) => {
     }
 
     // Generic error response
+    console.log('-> finished endpoint execution POST /admin/login');
     console.error('Admin login error:', error);
     res.status(500).json({
       success: false,
@@ -56,10 +61,12 @@ const login = async (req, res) => {
  * Get admin profile (requires authentication)
  */
 const getProfile = async (req, res) => {
+  console.log('-> triggered endpoint GET /admin/profile');
   try {
     const adminId = req.admin?.id || req.admin?.adminId;
 
     if (!adminId) {
+      console.log('-> finished endpoint execution GET /admin/profile');
       return res.status(401).json({
         success: false,
         message: 'Authentication required',
@@ -73,8 +80,10 @@ const getProfile = async (req, res) => {
       message: 'Profile retrieved successfully',
       data: admin,
     });
+    console.log('-> finished endpoint execution GET /admin/profile');
   } catch (error) {
     if (error.message === 'Admin not found') {
+      console.log('-> finished endpoint execution GET /admin/profile');
       return res.status(404).json({
         success: false,
         message: 'Admin not found',
@@ -82,6 +91,7 @@ const getProfile = async (req, res) => {
       });
     }
 
+    console.log('-> finished endpoint execution GET /admin/profile');
     console.error('Get admin profile error:', error);
     res.status(500).json({
       success: false,
@@ -96,6 +106,7 @@ const getProfile = async (req, res) => {
  * Get all students (requires authentication)
  */
 const getStudents = async (req, res) => {
+  console.log('-> triggered endpoint GET /admin/students');
   try {
     const students = await adminService.getAllStudents();
 
@@ -105,7 +116,9 @@ const getStudents = async (req, res) => {
       data: students,
       count: students.length,
     });
+    console.log('-> finished endpoint execution GET /admin/students');
   } catch (error) {
+    console.log('-> finished endpoint execution GET /admin/students');
     console.error('Get students error:', error);
     res.status(500).json({
       success: false,
@@ -120,6 +133,7 @@ const getStudents = async (req, res) => {
  * Get all alumni (requires authentication)
  */
 const getAlumni = async (req, res) => {
+  console.log('-> triggered endpoint GET /admin/alumni');
   try {
     const alumni = await adminService.getAllAlumni();
 
@@ -129,7 +143,9 @@ const getAlumni = async (req, res) => {
       data: alumni,
       count: alumni.length,
     });
+    console.log('-> finished endpoint execution GET /admin/alumni');
   } catch (error) {
+    console.log('-> finished endpoint execution GET /admin/alumni');
     console.error('Get alumni error:', error);
     res.status(500).json({
       success: false,
@@ -144,6 +160,7 @@ const getAlumni = async (req, res) => {
  * Get all events (requires authentication)
  */
 const getEvents = async (req, res) => {
+  console.log('-> triggered endpoint GET /admin/events');
   try {
     const events = await adminService.getAllEvents();
 
@@ -153,7 +170,9 @@ const getEvents = async (req, res) => {
       data: events,
       count: events.length,
     });
+    console.log('-> finished endpoint execution GET /admin/events');
   } catch (error) {
+    console.log('-> finished endpoint execution GET /admin/events');
     console.error('Get events error:', error);
     res.status(500).json({
       success: false,
@@ -168,11 +187,13 @@ const getEvents = async (req, res) => {
  * Update event status (requires authentication)
  */
 const updateEventStatus = async (req, res) => {
+  console.log(`-> triggered endpoint PUT /admin/events/:id/status`);
   try {
     const { id } = req.params;
     const { status } = req.body;
 
     if (!status) {
+      console.log('-> finished endpoint execution PUT /admin/events/:id/status');
       return res.status(400).json({
         success: false,
         message: 'Status is required',
@@ -186,8 +207,10 @@ const updateEventStatus = async (req, res) => {
       message: 'Event status updated successfully',
       data: updatedEvent,
     });
+    console.log('-> finished endpoint execution PUT /admin/events/:id/status');
   } catch (error) {
     if (error.message === 'Event not found') {
+      console.log('-> finished endpoint execution PUT /admin/events/:id/status');
       return res.status(404).json({
         success: false,
         message: 'Event not found',
@@ -196,6 +219,7 @@ const updateEventStatus = async (req, res) => {
     }
 
     if (error.message.includes('Event ID is required') || error.message.includes('Status is required')) {
+      console.log('-> finished endpoint execution PUT /admin/events/:id/status');
       return res.status(400).json({
         success: false,
         message: 'Validation error',
@@ -203,6 +227,7 @@ const updateEventStatus = async (req, res) => {
       });
     }
 
+    console.log('-> finished endpoint execution PUT /admin/events/:id/status');
     console.error('Update event status error:', error);
     res.status(500).json({
       success: false,

@@ -7,6 +7,8 @@ const { authenticateAdmin } = require('../middleware/adminAuth');
  * Event Routes
  * GET /api/events - Get all events
  * GET /api/events/:id - Get event by ID
+ * GET /api/events/judged-by/:userId - Get all events where user is assigned as judge
+ * GET /api/events/judged-by/:userId/rubrics - Get all rubrics for events where user is a judge
  * POST /api/events - Create a new event (Admin only)
  * PUT /api/events/:id - Update an event (Admin only)
  * DELETE /api/events/:id - Delete an event (Admin only)
@@ -24,6 +26,12 @@ router.get('/', eventController.getAllEvents);
 router.post('/', authenticateAdmin, eventController.createEvent);
 
 // Specific routes must come before generic :id route to avoid conflicts
+// GET /api/events/judged-by/:userId/rubrics (must come before /judged-by/:userId)
+router.get('/judged-by/:userId/rubrics', eventController.getRubricsForJudge);
+
+// GET /api/events/judged-by/:userId
+router.get('/judged-by/:userId', eventController.getEventsJudgedBy);
+
 // GET /api/events/:eventId/teams
 router.get('/:eventId/teams', eventController.getTeams);
 

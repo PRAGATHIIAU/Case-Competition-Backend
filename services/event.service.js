@@ -339,7 +339,10 @@ const submitScores = async (eventId, judgeId, teamId, scores) => {
       }
     }
 
-    // Prepare new score entries
+    // Get existing scores
+    const existingScores = event.scores || [];
+    
+    // Prepare new score entries with timestamp
     const timestamp = new Date().toISOString();
     const newScoreEntries = scores.map((scoreEntry) => ({
       judgeId,
@@ -349,13 +352,98 @@ const submitScores = async (eventId, judgeId, teamId, scores) => {
       timestamp,
     }));
 
-    // Update scores atomically
-    const updatedEvent = await eventRepository.updateScores(eventId, newScoreEntries);
+    // Create a map of existing scores by (judgeId, teamId, rubricId) combination
+    const existingScoresMap = new Map();
+    existingScores.forEach((score) => {
+      const key = `${score.judgeId}|${score.teamId}|${score.rubricId}`;
+      existingScoresMap.set(key, score);
+    });
+
+    // Update or add scores
+    newScoreEntries.forEach((newScore) => {
+      const key = `${newScore.judgeId}|${newScore.teamId}|${newScore.rubricId}`;
+      // Replace existing score or add new one
+      existingScoresMap.set(key, newScore);
+    });
+
+    // Convert map back to array
+    const updatedScores = Array.from(existingScoresMap.values());
+
+    // Update scores atomically (replace entire array)
+    const updatedEvent = await eventRepository.updateScores(eventId, updatedScores);
     if (!updatedEvent) {
       throw new Error('Failed to update scores');
     }
 
     return updatedEvent;
+  } catch (error) {
+    throw error;
+  }
+};
+
+/**
+ * Get all events where a user is assigned as a judge
+ * @param {string} userId - User ID (judgeId)
+ * @returns {Promise<Array>} Array of events where the user is a judge
+ */
+const getEventsJudgedBy = async (userId) => {
+  try {
+    if (!userId || typeof userId !== 'string' || !userId.trim()) {
+      throw new Error('User ID is required and must be a valid string');
+    }
+
+    // Get all events from DynamoDB (uses scan)
+    const allEvents = await eventRepository.getAllEvents();
+
+    // Filter events where the user is assigned as a judge
+    const filteredEvents = allEvents.filter((event) => {
+      // Check if event has judges array
+      if (!event.judges || !Array.isArray(event.judges)) {
+        return false;
+      }
+
+      // Check if any judge matches the userId
+      return event.judges.some((judge) => judge.judgeId === userId.trim());
+    });
+
+    return filteredEvents;
+  } catch (error) {
+    throw error;
+  }
+};
+
+/**
+ * Get rubrics for all events where a user is assigned as a judge
+ * @param {string} userId - User ID (judgeId)
+ * @returns {Promise<Array>} Array of rubrics with event context
+ */
+const getRubricsForJudge = async (userId) => {
+  try {
+    if (!userId || typeof userId !== 'string' || !userId.trim()) {
+      throw new Error('User ID is required and must be a valid string');
+    }
+
+    // Get all events where the user is a judge
+    const events = await getEventsJudgedBy(userId);
+
+    // Collect rubrics from all events with event context
+    const rubricsWithContext = [];
+
+    events.forEach((event) => {
+      const eventRubrics = event.rubrics || [];
+      
+      // Add each rubric with event context
+      eventRubrics.forEach((rubric) => {
+        rubricsWithContext.push({
+          ...rubric,
+          eventId: event.eventId,
+          eventName: event.eventInfo?.name || 'Unknown Event',
+          eventDescription: event.eventInfo?.description || '',
+        });
+      });
+    });
+
+    return rubricsWithContext;
   } catch (error) {
     throw error;
   }
@@ -475,6 +563,8 @@ module.exports = {
   updateEvent,
   deleteEvent,
   registerAlumniAsJudge,
+  getEventsJudgedBy,
+  getRubricsForJudge,
   getTeams,
   getRubrics,
   submitScores,

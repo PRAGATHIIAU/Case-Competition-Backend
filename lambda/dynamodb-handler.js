@@ -66,10 +66,28 @@ exports.handler = async (event) => {
             throw new Error('userId must be a valid number');
           }
           
-          result = await dynamodb.get({
+          console.log(`Getting alumni profile for userId: ${getUserId} from table: ${tableName}`);
+          
+          result = await dynamodb.send(new GetCommand({
             TableName: tableName,
             Key: { userId: getUserId }
-          }).promise();
+          }));
+          
+          console.log(`DynamoDB get result for userId ${getUserId}:`, {
+            hasItem: !!result.Item,
+            itemKeys: result.Item ? Object.keys(result.Item) : [],
+          });
+          
+          const responseData = {
+            success: true,
+            data: result.Item || null,
+          };
+          
+          console.log(`Returning response for userId ${getUserId}:`, {
+            success: responseData.success,
+            hasData: !!responseData.data,
+            dataKeys: responseData.data ? Object.keys(responseData.data) : [],
+          });
           
           return {
             statusCode: 200,
@@ -77,10 +95,7 @@ exports.handler = async (event) => {
               'Content-Type': 'application/json',
               'Access-Control-Allow-Origin': '*',
             },
-            body: JSON.stringify({
-              success: true,
-              data: result.Item || null,
-            }),
+            body: JSON.stringify(responseData),
           };
           
         case 'putAlumniProfile':
@@ -100,20 +115,26 @@ exports.handler = async (event) => {
           
           const now = new Date().toISOString();
           
-          const existingAlumniProfile = await dynamodb.get({
+          const existingAlumniProfile = await dynamodb.send(new GetCommand({
             TableName: tableName,
             Key: { userId: putUserId }
-          }).promise();
+          }));
           
           const alumniProfileData = {
             userId: putUserId,
             skills: body.profileData.skills || [],
             aspirations: body.profileData.aspirations || null,
+            bio: body.profileData.bio || null,
+            major: body.profileData.major || null,
+            grad_year: body.profileData.grad_year || null,
+            relevant_coursework: body.profileData.relevant_coursework || [],
             parsed_resume: body.profileData.parsed_resume || null,
             projects: body.profileData.projects || [],
             experiences: body.profileData.experiences || [],
             achievements: body.profileData.achievements || [],
             resume_url: body.profileData.resume_url || null,
+            linkedin_url: body.profileData.linkedin_url || null,
+            github_url: body.profileData.github_url || null,
             updatedAt: now,
           };
           
@@ -123,10 +144,10 @@ exports.handler = async (event) => {
             alumniProfileData.createdAt = now;
           }
           
-          await dynamodb.put({
+          await dynamodb.send(new PutCommand({
             TableName: tableName,
             Item: alumniProfileData,
-          }).promise();
+          }));
           
           return {
             statusCode: 200,
@@ -151,10 +172,10 @@ exports.handler = async (event) => {
             throw new Error('userId must be a valid number');
           }
           
-          const alumniProfileToUpdate = await dynamodb.get({
+          const alumniProfileToUpdate = await dynamodb.send(new GetCommand({
             TableName: tableName,
             Key: { userId: updateUserId }
-          }).promise();
+          }));
           
           if (!alumniProfileToUpdate.Item) {
             return {
@@ -174,7 +195,7 @@ exports.handler = async (event) => {
           const alumniExpressionAttributeNames = {};
           const alumniExpressionAttributeValues = {};
           
-          const alumniUpdateFields = ['skills', 'aspirations', 'parsed_resume', 'projects', 'experiences', 'achievements', 'resume_url'];
+          const alumniUpdateFields = ['skills', 'aspirations', 'bio', 'major', 'grad_year', 'relevant_coursework', 'parsed_resume', 'projects', 'experiences', 'achievements', 'resume_url', 'linkedin_url', 'github_url'];
           alumniUpdateFields.forEach((field, index) => {
             if (body.profileData && body.profileData[field] !== undefined) {
               const nameKey = `#attr${index}`;
@@ -195,14 +216,14 @@ exports.handler = async (event) => {
             throw new Error('No fields to update');
           }
           
-          const alumniUpdateResult = await dynamodb.update({
+          const alumniUpdateResult = await dynamodb.send(new UpdateCommand({
             TableName: tableName,
             Key: { userId: updateUserId },
             UpdateExpression: `SET ${alumniUpdateExpressions.join(', ')}`,
             ExpressionAttributeNames: alumniExpressionAttributeNames,
             ExpressionAttributeValues: alumniExpressionAttributeValues,
             ReturnValues: 'ALL_NEW',
-          }).promise();
+          }));
           
           return {
             statusCode: 200,
@@ -227,10 +248,10 @@ exports.handler = async (event) => {
             throw new Error('userId must be a valid number');
           }
           
-          const alumniProfileToDelete = await dynamodb.get({
+          const alumniProfileToDelete = await dynamodb.send(new GetCommand({
             TableName: tableName,
             Key: { userId: deleteUserId }
-          }).promise();
+          }));
           
           if (!alumniProfileToDelete.Item) {
             return {
@@ -246,10 +267,10 @@ exports.handler = async (event) => {
             };
           }
           
-          await dynamodb.delete({
+          await dynamodb.send(new DeleteCommand({
             TableName: tableName,
             Key: { userId: deleteUserId }
-          }).promise();
+          }));
           
           return {
             statusCode: 200,
@@ -445,13 +466,13 @@ exports.handler = async (event) => {
         };
         
       case 'updateScores':
-        // Atomically append new scores to event.scores array
+        // Replace the entire scores array (updates existing scores or adds new ones)
         if (!body.eventId) {
           throw new Error('eventId is required for updateScores operation');
         }
         
-        if (!body.newScores || !Array.isArray(body.newScores) || body.newScores.length === 0) {
-          throw new Error('newScores must be a non-empty array');
+        if (!body.scores || !Array.isArray(body.scores)) {
+          throw new Error('scores must be an array');
         }
         
         // Check if event exists
@@ -474,19 +495,17 @@ exports.handler = async (event) => {
           };
         }
         
-        // Atomically append new scores to the scores array
-        // Using list_append with if_not_exists to handle case where scores array doesn't exist
+        // Replace the entire scores array (allows updating existing scores)
         const updateScoresResult = await dynamodb.send(new UpdateCommand({
           TableName: tableName,
           Key: { eventId: body.eventId },
-          UpdateExpression: 'SET #scores = list_append(if_not_exists(#scores, :empty_list), :new_scores), #updatedAt = :updatedAt',
+          UpdateExpression: 'SET #scores = :scores, #updatedAt = :updatedAt',
           ExpressionAttributeNames: {
             '#scores': 'scores',
             '#updatedAt': 'updatedAt',
           },
           ExpressionAttributeValues: {
-            ':new_scores': body.newScores,
-            ':empty_list': [],
+            ':scores': body.scores,
             ':updatedAt': new Date().toISOString(),
           },
           ReturnValues: 'ALL_NEW',

@@ -176,14 +176,14 @@ const deleteEvent = async (eventId) => {
 /**
  * Update scores for an event (atomic operation)
  * @param {string} eventId - Event ID
- * @param {Array} newScores - Array of new score entries to append
+ * @param {Array} scores - Array of score entries to replace the entire scores array
  * @returns {Promise<Object|null>} Updated event object or null if not found
  */
-const updateScores = async (eventId, newScores) => {
+const updateScores = async (eventId, scores) => {
   try {
     const response = await callDynamoDBLambda('updateScores', {
       eventId,
-      newScores,
+      scores,
     });
     
     if (!response.data) {
