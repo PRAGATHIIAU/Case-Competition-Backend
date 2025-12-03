@@ -539,6 +539,7 @@ const signup = async (studentData, file) => {
         location: mergedLocation, // Store location in DynamoDB
         mentorship_interest: mergedMentorshipInterest,
         mentor_preference: mergedMentorPreference,
+        mentor_paired: false, // Default to false for new signups
       };
 
       // Save profile to DynamoDB
@@ -617,6 +618,12 @@ const signup = async (studentData, file) => {
     if (mergedLocation && (!mergedStudent.location || mergedStudent.location === null || mergedStudent.location === '')) {
       mergedStudent.location = mergedLocation;
       console.log('⚠️ Location not found in DynamoDB, using extracted value (fallback):', mergedLocation);
+    }
+    
+    // Fallback: Ensure mentor_paired is in response (default to false)
+    if (mergedStudent.mentor_paired === undefined || mergedStudent.mentor_paired === null) {
+      mergedStudent.mentor_paired = false;
+      console.log('⚠️ Mentor paired not found in DynamoDB, using default value (fallback): false');
     }
 
     // Generate JWT token
@@ -723,6 +730,7 @@ const getAllStudents = async () => {
             location: profile?.location || null,
             mentorship_interest: profile?.mentorship_interest || false,
             mentor_preference: profile?.mentor_preference || null,
+            mentor_paired: profile?.mentor_paired !== undefined ? profile.mentor_paired : false,
           };
         } catch (error) {
           // If profile fetch fails, return student with empty profile fields
@@ -740,6 +748,7 @@ const getAllStudents = async () => {
             location: null,
             mentorship_interest: false,
             mentor_preference: null,
+            mentor_paired: false,
           };
         }
       })
@@ -810,6 +819,7 @@ const getStudentWithProfile = async (studentId) => {
         location: profile.location || null,
         mentorship_interest: profile.mentorship_interest || false,
         mentor_preference: profile.mentor_preference || null,
+        mentor_paired: profile.mentor_paired !== undefined ? profile.mentor_paired : false,
       };
     } else {
       // No profile data, return only RDS data with empty profile fields
@@ -826,6 +836,7 @@ const getStudentWithProfile = async (studentId) => {
         location: null,
         mentorship_interest: false,
         mentor_preference: null,
+        mentor_paired: false,
       };
     }
   } catch (error) {

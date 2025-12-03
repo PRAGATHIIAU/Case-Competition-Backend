@@ -116,7 +116,16 @@ const getAllMentors = async () => {
       }
     });
     
-    return mentorsWithProfiles;
+    // Filter mentors: only include those with willing_to_be_mentor = true AND capacity > 0
+    const filteredMentors = mentorsWithProfiles.filter(mentor => {
+      const willing = mentor.willing_to_be_mentor === true || mentor.willing_to_be_mentor === 'true' || mentor.willing_to_be_mentor === 1;
+      const capacity = mentor.mentor_capacity || 0;
+      return willing && capacity > 0;
+    });
+    
+    console.log(`[getAllMentors] Filtered mentors: ${filteredMentors.length} out of ${mentorsWithProfiles.length} (willing_to_be_mentor=true AND capacity>0)`);
+    
+    return filteredMentors;
   } catch (error) {
     throw error;
   }
@@ -125,12 +134,23 @@ const getAllMentors = async () => {
 /**
  * Get all mentees (students)
  * @returns {Promise<Array>} Array of student profiles (merged from RDS + DynamoDB)
+ * Filtered to only include students with mentorship_interest=true AND mentor_paired=false
  */
 const getAllMentees = async () => {
   try {
     // getAllStudents already merges RDS and DynamoDB data
     const studentsWithProfiles = await getAllStudents();
-    return studentsWithProfiles;
+    
+    // Filter students: only include those with mentorship_interest = true AND mentor_paired = false
+    const filteredStudents = studentsWithProfiles.filter(student => {
+      const mentorshipInterest = student.mentorship_interest === true || student.mentorship_interest === 'true' || student.mentorship_interest === 1;
+      const mentorPaired = student.mentor_paired === true || student.mentor_paired === 'true' || student.mentor_paired === 1;
+      return mentorshipInterest && !mentorPaired;
+    });
+    
+    console.log(`[getAllMentees] Filtered students: ${filteredStudents.length} out of ${studentsWithProfiles.length} (mentorship_interest=true AND mentor_paired=false)`);
+    
+    return filteredStudents;
   } catch (error) {
     throw error;
   }
