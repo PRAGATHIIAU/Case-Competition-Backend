@@ -4,7 +4,7 @@ const path = require('path');
 const fs = require('fs').promises;
 const userRepository = require('../repositories/user.repository');
 const { getAlumniProfile } = require('./auth.service');
-const { getAllStudents } = require('./student.service');
+const { getAllStudents, getStudentWithProfile } = require('./student.service');
 
 const execAsync = promisify(exec);
 
@@ -485,10 +485,233 @@ const findSimilarStudentsForMentor = async (mentorId) => {
   }
 };
 
+/**
+ * Find similar mentors for a specific student
+ * @param {string} studentId - Student ID (UUID)
+ * @returns {Promise<Array>} Array of mentor IDs with similarity scores, sorted by score (descending)
+ */
+const findSimilarMentorsForStudent = async (studentId) => {
+  try {
+    // Validate studentId (UUID format)
+    if (!studentId || typeof studentId !== 'string' || studentId.trim() === '') {
+      throw new Error('Student ID must be a valid UUID string');
+    }
+
+    // Get student with merged profile data
+    const student = await getStudentWithProfile(studentId);
+    
+    if (!student) {
+      throw new Error('Student not found');
+    }
+
+    // Get all mentors
+    const mentors = await getAllMentors();
+
+    if (mentors.length === 0) {
+      return [];
+    }
+
+    // Prepare student data for Python script (as mentee)
+    // Ensure student has student_id field (can be id or student_id)
+    const studentForMatching = {
+      ...student,
+      student_id: student.student_id || student.id,
+    };
+
+    // Prepare mentors data for Python script
+    // Set each mentor's capacity to 1 so they can all receive one copy of the student
+    // We'll duplicate the student so each mentor can get assigned one copy
+    const mentorsForMatching = mentors.map(mentor => ({
+      ...mentor,
+      willing_to_be_mentor: true,
+      mentor_capacity: 1, // Each mentor can take 1 mentee
+    }));
+
+    // Duplicate the student so each mentor can receive one copy
+    // This allows us to get similarity scores for all mentors
+    // Each student copy will have a unique ID but same profile data
+    const studentCopies = mentorsForMatching.map((mentor, index) => ({
+      ...studentForMatching,
+      student_id: `${studentForMatching.student_id}_copy_${index}`, // Temporary unique ID
+      original_student_id: studentForMatching.student_id, // Keep track of original
+    }));
+
+    // Prepare input data for Python script (duplicated students as mentees, all mentors)
+    const inputData = {
+      mentors: mentorsForMatching,
+      mentees: studentCopies
+    };
+
+    // Get path to Python script
+    const scriptPath = path.join(__dirname, '..', 'matching', 'mentor_mentee_matcher.py');
+
+    // Check if Python script exists
+    try {
+      await fs.access(scriptPath);
+    } catch (error) {
+      throw new Error(`Python matching script not found at ${scriptPath}`);
+    }
+
+    // Convert input data to JSON string
+    const inputJson = JSON.stringify(inputData);
+
+    // Detect Python command (try 'python' first, then 'python3')
+    let pythonCommand = 'python';
+    try {
+      await execAsync('python --version');
+    } catch (error) {
+      try {
+        await execAsync('python3 --version');
+        pythonCommand = 'python3';
+      } catch (error2) {
+        throw new Error('Python is not installed or not found in PATH. Please install Python 3.');
+      }
+    }
+
+    // Use file-based approach for better cross-platform compatibility
+    const matchingDir = path.join(__dirname, '..', 'matching');
+    const timestamp = Date.now();
+    const tempInputFile = path.join(matchingDir, `temp_input_${timestamp}.json`);
+
+    let result;
+    let stdoutData = '';
+    let stderrData = '';
+    let outputJson = '';
+
+    try {
+      // Write input to temp file
+      await fs.writeFile(tempInputFile, inputJson, 'utf8');
+
+      // Execute Python script using spawn for better error handling
+      const pythonProcess = spawn(pythonCommand, [scriptPath, tempInputFile], {
+        shell: false,
+        stdio: ['ignore', 'pipe', 'pipe']
+      });
+
+      // Collect stdout
+      pythonProcess.stdout.on('data', (data) => {
+        stdoutData += data.toString();
+      });
+
+      // Collect stderr
+      pythonProcess.stderr.on('data', (data) => {
+        stderrData += data.toString();
+      });
+
+      // Wait for process to complete
+      await new Promise((resolve, reject) => {
+        pythonProcess.on('close', (code) => {
+          if (code !== 0) {
+            reject(new Error(`Python script exited with code ${code}. stderr: ${stderrData.substring(0, 1000)}`));
+          } else {
+            resolve();
+          }
+        });
+
+        pythonProcess.on('error', (error) => {
+          reject(new Error(`Failed to spawn Python process: ${error.message}. stderr: ${stderrData.substring(0, 1000)}`));
+        });
+      });
+
+      // Process output
+      outputJson = stdoutData.trim();
+
+      // Remove any BOM or leading whitespace that might interfere
+      if (outputJson.length > 0 && outputJson.charCodeAt(0) === 0xFEFF) {
+        outputJson = outputJson.slice(1);
+      }
+
+      // Log stderr if there's any (for debugging, but don't fail if it's just warnings)
+      if (stderrData.trim()) {
+        console.warn('Python script stderr (warnings/info):', stderrData.substring(0, 500));
+      }
+
+      // Clean up temp input file
+      await fs.unlink(tempInputFile).catch(() => {});
+
+      // Validate that output starts with JSON (either { or [)
+      if (!outputJson || (!outputJson.startsWith('{') && !outputJson.startsWith('['))) {
+        throw new Error(`Python script output is not valid JSON. Output: ${outputJson.substring(0, 200)}`);
+      }
+
+      // Parse JSON output
+      try {
+        result = JSON.parse(outputJson);
+      } catch (parseError) {
+        throw new Error(`Failed to parse JSON output: ${parseError.message}. Output preview: ${outputJson.substring(0, 500)}`);
+      }
+    } catch (error) {
+      // Clean up temp input file on error
+      await fs.unlink(tempInputFile).catch(() => {});
+
+      // Log error details for debugging
+      console.error('Python script execution error:', error.message);
+      if (stderrData) {
+        console.error('Python script stderr:', stderrData.substring(0, 1000));
+      }
+      if (stdoutData) {
+        console.error('Python script stdout (on error):', stdoutData.substring(0, 500));
+      }
+
+      throw new Error(`Failed to execute matching script: ${error.message}`);
+    }
+
+    // Extract similarity scores from the result
+    // The result.matches object has mentor IDs as keys
+    // Since we duplicated the student for each mentor, each mentor should have one student copy assigned
+    const mentorScores = [];
+
+    if (result.matches && typeof result.matches === 'object') {
+      // Iterate through all mentors in the matches
+      for (const [mentorIdStr, mentorMatch] of Object.entries(result.matches)) {
+        if (mentorMatch && mentorMatch.mentees && Array.isArray(mentorMatch.mentees) && mentorMatch.mentees.length > 0) {
+          // Each mentor should have exactly one student copy assigned
+          // Get the similarity score from the first (and only) mentee
+          const studentMatch = mentorMatch.mentees[0];
+          
+          if (studentMatch && studentMatch.similarity_score !== undefined) {
+            mentorScores.push({
+              mentor_id: parseInt(mentorIdStr, 10),
+              similarity_score: studentMatch.similarity_score || 0
+            });
+          }
+        } else {
+          // If mentor has no matches, they have zero similarity
+          mentorScores.push({
+            mentor_id: parseInt(mentorIdStr, 10),
+            similarity_score: 0
+          });
+        }
+      }
+    }
+
+    // Also include mentors that weren't in the matches (they have zero similarity)
+    const matchedMentorIds = new Set(mentorScores.map(m => m.mentor_id));
+    mentorsForMatching.forEach((mentor, index) => {
+      if (!matchedMentorIds.has(mentor.id)) {
+        mentorScores.push({
+          mentor_id: mentor.id,
+          similarity_score: 0
+        });
+      }
+    });
+
+    // Sort by similarity score (descending)
+    mentorScores.sort((a, b) => b.similarity_score - a.similarity_score);
+
+    // Return mentor IDs with similarity scores in descending order of similarity
+    return mentorScores;
+  } catch (error) {
+    console.error('Find similar mentors error:', error);
+    throw error;
+  }
+};
+
 module.exports = {
   getAllMentors,
   getAllMentees,
   performMatching,
-  findSimilarStudentsForMentor
+  findSimilarStudentsForMentor,
+  findSimilarMentorsForStudent
 };
 
