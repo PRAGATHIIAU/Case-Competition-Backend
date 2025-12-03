@@ -761,6 +761,16 @@ const signup = async (userData, file) => {
       coursework: mergedUser.relevant_coursework?.slice(0, 3),
     });
 
+    // Log profile creation for batch matching
+    try {
+      const { logUserProfileChange } = require('../repositories/profileChangeLog.repository');
+      await logUserProfileChange(newUser.id, 'CREATE');
+      console.log('✅ Logged profile creation for batch matching:', newUser.id);
+    } catch (logError) {
+      // Don't fail signup if logging fails
+      console.warn('⚠️ Failed to log profile creation:', logError.message);
+    }
+
     // Generate JWT token
     const token = jwt.sign(
       { userId: newUser.id, email: newUser.email, type: 'alumni' },
@@ -1022,21 +1032,24 @@ const updateUser = async (userId, updateData, file) => {
       await userRepository.updateUserPassword(userId, hashedPassword);
     }
 
+    // Check if there are any updates (RDS or DynamoDB)
+    const hasRdsUpdates = Object.keys(updateDataForDb).length > 0;
+    const hasProfileUpdates = skills !== undefined || aspirations !== undefined || bio !== undefined ||
+                              major !== undefined || grad_year !== undefined || relevant_coursework !== undefined ||
+                              parsed_resume !== undefined || projects !== undefined ||
+                              experiences !== undefined || achievements !== undefined || file;
+    const hasAnyUpdates = hasRdsUpdates || hasProfileUpdates;
+
     // Update user in RDS (only if there are RDS fields to update)
     let updatedUser = existingUser;
-    if (Object.keys(updateDataForDb).length > 0) {
+    if (hasRdsUpdates) {
       updatedUser = await userRepository.updateUser(userId, updateDataForDb);
       if (!updatedUser) {
         throw new Error('User not found');
       }
     }
 
-    // Prepare DynamoDB profile update data
-    const hasProfileUpdates = skills !== undefined || aspirations !== undefined || bio !== undefined ||
-                              major !== undefined || grad_year !== undefined || relevant_coursework !== undefined ||
-                              parsed_resume !== undefined || projects !== undefined ||
-                              experiences !== undefined || achievements !== undefined || file;
-
+    // Update DynamoDB profile (only if there are profile fields to update)
     if (hasProfileUpdates) {
       // Get current profile or create new one
       const currentProfile = await getAlumniProfile(userId);
@@ -1084,6 +1097,18 @@ const updateUser = async (userId, updateData, file) => {
       await saveAlumniProfile(userId, profileData);
     }
 
+    // Log profile update for batch matching (if ANY updates were made)
+    if (hasAnyUpdates) {
+      try {
+        const { logUserProfileChange } = require('../repositories/profileChangeLog.repository');
+        await logUserProfileChange(userId, 'UPDATE');
+        console.log('✅ Logged profile update for batch matching:', userId);
+      } catch (logError) {
+        // Don't fail update if logging fails
+        console.warn('⚠️ Failed to log profile update:', logError.message);
+      }
+    }
+
     // Return merged data
     return await getUserWithProfile(userId);
   } catch (error) {
@@ -1114,6 +1139,17 @@ const saveExtendedProfile = async (userId, profileData) => {
 
     // Save to DynamoDB (only profile fields, not willingness flags)
     const savedProfile = await saveAlumniProfile(userId, cleanedProfileData);
+    
+    // Log profile update for batch matching
+    try {
+      const { logUserProfileChange } = require('../repositories/profileChangeLog.repository');
+      await logUserProfileChange(userId, 'UPDATE');
+      console.log('✅ Logged profile update for batch matching (saveExtendedProfile):', userId);
+    } catch (logError) {
+      // Don't fail update if logging fails
+      console.warn('⚠️ Failed to log profile update:', logError.message);
+    }
+    
     return savedProfile;
   } catch (error) {
     throw error;
