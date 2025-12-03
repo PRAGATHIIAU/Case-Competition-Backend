@@ -95,6 +95,11 @@ def extract_text_from_profile(profile: Dict[str, Any]) -> str:
     if profile.get('major'):
         text_parts.append(str(profile['major']))
     
+    # Extract relevant_coursework (for students - array)
+    if profile.get('relevant_coursework') and isinstance(profile['relevant_coursework'], list):
+        coursework_text = ' '.join([str(course) for course in profile['relevant_coursework']])
+        text_parts.append(coursework_text)
+    
     # Combine all text parts
     combined_text = ' '.join(text_parts)
     
@@ -169,29 +174,194 @@ def vectorize_profiles(profiles: List[Dict[str, Any]]) -> Tuple[np.ndarray, Tfid
     return vectors.toarray(), vectorizer
 
 
-def compute_similarity_scores(
-    mentor_vectors: np.ndarray,
-    mentee_vectors: np.ndarray
+def normalize_location(location: str) -> str:
+    """
+    Normalize location string for comparison.
+    
+    Args:
+        location: Location string (e.g., "New York, NY", "New York City")
+    
+    Returns:
+        Normalized location string (lowercase, stripped, common abbreviations expanded)
+    """
+    if not location or not isinstance(location, str):
+        return ''
+    
+    # Convert to lowercase and strip
+    normalized = location.lower().strip()
+    
+    # Remove common punctuation
+    normalized = re.sub(r'[.,;]', '', normalized)
+    
+    # Expand common abbreviations
+    abbreviations = {
+        'ny': 'new york',
+        'ca': 'california',
+        'tx': 'texas',
+        'fl': 'florida',
+        'il': 'illinois',
+        'pa': 'pennsylvania',
+        'az': 'arizona',
+        'ma': 'massachusetts',
+        'tn': 'tennessee',
+        'in': 'indiana',
+        'mo': 'missouri',
+        'md': 'maryland',
+        'wi': 'wisconsin',
+        'co': 'colorado',
+        'mn': 'minnesota',
+        'sc': 'south carolina',
+        'al': 'alabama',
+        'la': 'louisiana',
+        'ky': 'kentucky',
+        'or': 'oregon',
+        'ok': 'oklahoma',
+        'ct': 'connecticut',
+        'ut': 'utah',
+        'ia': 'iowa',
+        'nv': 'nevada',
+        'ar': 'arkansas',
+        'ms': 'mississippi',
+        'ks': 'kansas',
+        'nm': 'new mexico',
+        'ne': 'nebraska',
+        'wv': 'west virginia',
+        'id': 'idaho',
+        'hi': 'hawaii',
+        'nh': 'new hampshire',
+        'me': 'maine',
+        'mt': 'montana',
+        'ri': 'rhode island',
+        'de': 'delaware',
+        'sd': 'south dakota',
+        'nd': 'north dakota',
+        'ak': 'alaska',
+        'dc': 'washington dc',
+        'vt': 'vermont',
+        'wy': 'wyoming',
+    }
+    
+    # Replace abbreviations
+    for abbr, full in abbreviations.items():
+        # Match whole word abbreviations
+        normalized = re.sub(r'\b' + abbr + r'\b', full, normalized)
+    
+    # Remove extra whitespace
+    normalized = re.sub(r'\s+', ' ', normalized).strip()
+    
+    return normalized
+
+
+def compute_location_similarity(
+    mentor_locations: List[str],
+    mentee_locations: List[str]
 ) -> np.ndarray:
     """
-    Compute cosine similarity scores between all mentors and mentees.
+    Compute location similarity scores between mentors and mentees.
+    
+    Args:
+        mentor_locations: List of mentor location strings
+        mentee_locations: List of mentee location strings
+    
+    Returns:
+        Location similarity matrix (n_mentees x n_mentors) where entry [i, j] is:
+        - 1.0 if locations match exactly (after normalization)
+        - 0.5 if locations share a common word (city, state, or country)
+        - 0.0 if locations don't match
+    """
+    n_mentees = len(mentee_locations)
+    n_mentors = len(mentor_locations)
+    similarity_matrix = np.zeros((n_mentees, n_mentors))
+    
+    for i, mentee_loc in enumerate(mentee_locations):
+        mentee_normalized = normalize_location(mentee_loc) if mentee_loc else ''
+        mentee_words = set(mentee_normalized.split()) if mentee_normalized else set()
+        
+        for j, mentor_loc in enumerate(mentor_locations):
+            mentor_normalized = normalize_location(mentor_loc) if mentor_loc else ''
+            mentor_words = set(mentor_normalized.split()) if mentor_normalized else set()
+            
+            # Skip if both are empty
+            if not mentee_normalized and not mentor_normalized:
+                similarity_matrix[i, j] = 0.0
+                continue
+            
+            # Exact match (after normalization)
+            if mentee_normalized == mentor_normalized and mentee_normalized:
+                similarity_matrix[i, j] = 1.0
+            # Partial match (share common words)
+            elif mentee_words and mentor_words:
+                common_words = mentee_words.intersection(mentor_words)
+                # Remove common stop words
+                stop_words = {'the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by'}
+                common_words = common_words - stop_words
+                
+                if common_words:
+                    # Calculate similarity based on common words
+                    # Use Jaccard similarity (intersection over union)
+                    union_words = mentee_words.union(mentor_words)
+                    if union_words:
+                        jaccard = len(common_words) / len(union_words)
+                        similarity_matrix[i, j] = jaccard * 0.5  # Scale to 0.5 max for partial matches
+                    else:
+                        similarity_matrix[i, j] = 0.0
+                else:
+                    similarity_matrix[i, j] = 0.0
+            else:
+                similarity_matrix[i, j] = 0.0
+    
+    return similarity_matrix
+
+
+def compute_similarity_scores(
+    mentor_vectors: np.ndarray,
+    mentee_vectors: np.ndarray,
+    mentor_locations: List[str] = None,
+    mentee_locations: List[str] = None,
+    profile_weight: float = 0.7,
+    location_weight: float = 0.3
+) -> np.ndarray:
+    """
+    Compute combined similarity scores between all mentors and mentees.
+    Combines profile similarity (TF-IDF cosine similarity) with location similarity.
     
     Args:
         mentor_vectors: Matrix of mentor profile vectors (n_mentors x n_features)
         mentee_vectors: Matrix of mentee profile vectors (n_mentees x n_features)
+        mentor_locations: List of mentor location strings (optional)
+        mentee_locations: List of mentee location strings (optional)
+        profile_weight: Weight for profile similarity (default: 0.7)
+        location_weight: Weight for location similarity (default: 0.3)
     
     Returns:
-        Similarity matrix (n_mentees x n_mentors) where entry [i, j] is similarity
+        Combined similarity matrix (n_mentees x n_mentors) where entry [i, j] is similarity
         between mentee i and mentor j
     """
-    # Compute cosine similarity
-    similarity_matrix = cosine_similarity(mentee_vectors, mentor_vectors)
+    # Compute profile similarity using cosine similarity
+    profile_similarity = cosine_similarity(mentee_vectors, mentor_vectors)
     
     # Handle NaN values (can occur when comparing zero vectors)
-    # Replace NaN with 0 (zero vectors have no similarity)
-    similarity_matrix = np.nan_to_num(similarity_matrix, nan=0.0, posinf=1.0, neginf=0.0)
+    profile_similarity = np.nan_to_num(profile_similarity, nan=0.0, posinf=1.0, neginf=0.0)
     
-    return similarity_matrix
+    # Compute location similarity if locations are provided
+    if mentor_locations and mentee_locations:
+        location_similarity = compute_location_similarity(mentor_locations, mentee_locations)
+        
+        # Combine profile and location similarities
+        # Normalize weights to sum to 1.0
+        total_weight = profile_weight + location_weight
+        if total_weight > 0:
+            profile_weight_norm = profile_weight / total_weight
+            location_weight_norm = location_weight / total_weight
+            combined_similarity = (profile_weight_norm * profile_similarity + 
+                                  location_weight_norm * location_similarity)
+        else:
+            combined_similarity = profile_similarity
+    else:
+        # If no locations provided, use only profile similarity
+        combined_similarity = profile_similarity
+    
+    return combined_similarity
 
 
 def match_mentees_to_mentors(
@@ -347,9 +517,25 @@ def perform_matching(mentors_data: List[Dict[str, Any]], mentees_data: List[Dict
     mentee_nonzero = np.count_nonzero(mentee_vectors)
     print(f"Non-zero vector elements: {mentor_nonzero} in mentor vectors, {mentee_nonzero} in mentee vectors", file=sys.stderr)
     
-    # Compute similarity scores
-    print("Computing similarity scores...", file=sys.stderr)
-    similarity_matrix = compute_similarity_scores(mentor_vectors, mentee_vectors)
+    # Extract locations from profiles
+    mentor_locations = [m.get('location', '') or '' for m in mentors]
+    mentee_locations = [m.get('location', '') or '' for m in mentees_data]
+    
+    # Log location extraction
+    mentors_with_location = sum(1 for loc in mentor_locations if loc.strip())
+    mentees_with_location = sum(1 for loc in mentee_locations if loc.strip())
+    print(f"Locations extracted: {mentors_with_location}/{len(mentors)} mentors, {mentees_with_location}/{len(mentees_data)} mentees", file=sys.stderr)
+    
+    # Compute similarity scores (combines profile and location similarity)
+    print("Computing similarity scores (profile + location)...", file=sys.stderr)
+    similarity_matrix = compute_similarity_scores(
+        mentor_vectors, 
+        mentee_vectors,
+        mentor_locations=mentor_locations,
+        mentee_locations=mentee_locations,
+        profile_weight=0.7,  # 70% weight for profile data
+        location_weight=0.3  # 30% weight for location
+    )
     
     # Debug: Check similarity matrix statistics
     if similarity_matrix.size > 0:

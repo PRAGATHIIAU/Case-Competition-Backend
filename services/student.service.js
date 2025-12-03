@@ -667,7 +667,9 @@ const getAllStudents = async () => {
             projects: profile?.projects || [],
             experiences: profile?.experiences || [],
             achievements: profile?.achievements || [],
+            relevant_coursework: profile?.relevant_coursework || [],
             resume_url: profile?.resume_url || null,
+            location: profile?.location || null,
           };
         } catch (error) {
           // If profile fetch fails, return student with empty profile fields
@@ -680,7 +682,9 @@ const getAllStudents = async () => {
             projects: [],
             experiences: [],
             achievements: [],
+            relevant_coursework: [],
             resume_url: null,
+            location: null,
           };
         }
       })
@@ -748,6 +752,7 @@ const getStudentWithProfile = async (studentId) => {
         achievements: profile.achievements || [],
         relevant_coursework: profile.relevant_coursework || [],
         resume_url: profile.resume_url || null,
+        location: profile.location || null,
       };
     } else {
       // No profile data, return only RDS data with empty profile fields
@@ -761,6 +766,7 @@ const getStudentWithProfile = async (studentId) => {
         achievements: [],
         relevant_coursework: [],
         resume_url: null,
+        location: null,
       };
     }
   } catch (error) {

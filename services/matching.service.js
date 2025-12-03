@@ -97,6 +97,7 @@ const getAllMentors = async () => {
           experiences: profile?.experiences || [],
           achievements: profile?.achievements || [],
           resume_url: profile?.resume_url || null,
+          location: profile?.location || null,
         };
       } else {
         // If Promise.allSettled result is rejected (shouldn't happen with our error handling)
@@ -320,6 +321,7 @@ const findSimilarStudentsForMentor = async (mentorId) => {
       experiences: profile?.experiences || [],
       achievements: profile?.achievements || [],
       resume_url: profile?.resume_url || null,
+      location: profile?.location || null,
     };
 
     // Get all students
