@@ -16,7 +16,8 @@
  *   teams: array of {
  *     teamId: string,
  *     teamName: string,
- *     members: array of strings (student IDs)
+ *     members: array of strings (student IDs or email addresses),
+ *     slotPreference: number (optional - slot number preference)
  *   },
  *   rubrics: array of {
  *     rubricId: string,
@@ -27,6 +28,12 @@
  *   judges: array of {
  *     judgeId: string,
  *     status: "approved" | "pending"
+ *   },
+ *   slots: array of {
+ *     slotNumber: number,
+ *     startTime: string (ISO 8601),
+ *     endTime: string (ISO 8601),
+ *     location: string
  *   },
  *   scores: array of {
  *     judgeId: string,
@@ -51,6 +58,7 @@ const EventModel = {
     TEAMS: 'teams',
     RUBRICS: 'rubrics',
     JUDGES: 'judges',
+    SLOTS: 'slots',
     SCORES: 'scores',
     CREATED_AT: 'createdAt',
     UPDATED_AT: 'updatedAt',
@@ -61,6 +69,7 @@ const EventModel = {
     TEAM_ID: 'teamId',
     TEAM_NAME: 'teamName',
     MEMBERS: 'members',
+    SLOT_PREFERENCE: 'slotPreference',
   },
 
   // Rubric structure
@@ -75,6 +84,14 @@ const EventModel = {
   JUDGE_FIELDS: {
     JUDGE_ID: 'judgeId',
     STATUS: 'status',
+  },
+
+  // Slot structure
+  SLOT_FIELDS: {
+    SLOT_NUMBER: 'slotNumber',
+    START_TIME: 'startTime',
+    END_TIME: 'endTime',
+    LOCATION: 'location',
   },
 
   // Score structure
@@ -93,7 +110,7 @@ const EventModel = {
  * @throws {Error} If validation fails
  */
 const validateEventData = (eventData) => {
-  const { eventInfo, teams, rubrics, judges, scores } = eventData;
+  const { eventInfo, teams, rubrics, judges, slots, scores } = eventData;
 
   // Validate eventInfo
   if (eventInfo !== undefined) {
@@ -119,6 +136,9 @@ const validateEventData = (eventData) => {
       }
       if (!Array.isArray(team.members)) {
         throw new Error(`Team at index ${index} must have a members array`);
+      }
+      if (team.slotPreference !== undefined && typeof team.slotPreference !== 'number') {
+        throw new Error(`Team at index ${index} must have a valid slotPreference (number)`);
       }
     });
   }
@@ -155,6 +175,27 @@ const validateEventData = (eventData) => {
       }
       if (judge.status !== 'approved' && judge.status !== 'pending') {
         throw new Error(`Judge at index ${index} must have status "approved" or "pending"`);
+      }
+    });
+  }
+
+  // Validate slots
+  if (slots !== undefined) {
+    if (!Array.isArray(slots)) {
+      throw new Error('Slots must be an array');
+    }
+    slots.forEach((slot, index) => {
+      if (typeof slot.slotNumber !== 'number') {
+        throw new Error(`Slot at index ${index} must have a valid slotNumber (number)`);
+      }
+      if (!slot.startTime || typeof slot.startTime !== 'string' || !slot.startTime.trim()) {
+        throw new Error(`Slot at index ${index} must have a valid startTime (ISO 8601 string)`);
+      }
+      if (!slot.endTime || typeof slot.endTime !== 'string' || !slot.endTime.trim()) {
+        throw new Error(`Slot at index ${index} must have a valid endTime (ISO 8601 string)`);
+      }
+      if (!slot.location || typeof slot.location !== 'string' || !slot.location.trim()) {
+        throw new Error(`Slot at index ${index} must have a valid location (string)`);
       }
     });
   }

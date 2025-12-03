@@ -15,6 +15,7 @@ const { authenticateAdmin } = require('../middleware/adminAuth');
  * DELETE /api/events/:id - Delete an event (Admin only)
  * POST /api/events/:id/register - Register alumni as judge
  * GET /api/events/:eventId/teams - Get teams with total scores
+ * PUT /api/events/:eventId/teams - Update team details (teamId is generated automatically)
  * GET /api/events/:eventId/rubrics - Get rubrics
  * POST /api/events/:eventId/score - Submit scores
  * GET /api/events/:eventId/leaderboard - Get leaderboard
@@ -38,6 +39,9 @@ router.get('/judged-by/:userId', eventController.getEventsJudgedBy);
 
 // GET /api/events/:eventId/teams
 router.get('/:eventId/teams', eventController.getTeams);
+
+// PUT /api/events/:eventId/teams
+router.put('/:eventId/teams', eventController.updateTeamDetails);
 
 // GET /api/events/:eventId/rubrics
 router.get('/:eventId/rubrics', eventController.getRubrics);

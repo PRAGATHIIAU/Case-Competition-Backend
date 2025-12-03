@@ -1,6 +1,7 @@
 const eventRepository = require('../repositories/event.repository');
 const { validateEventData } = require('../models/event.model');
 const emailService = require('./email.service');
+const { generateTeamId } = require('../repositories/event.repository');
 
 /**
  * Event Service
@@ -148,10 +149,11 @@ const deleteEvent = async (eventId) => {
  * Register alumni as judge for an event
  * @param {string} eventId - Event ID
  * @param {Object} registrationData - Registration data
- * @param {string} registrationData.alumniEmail - Alumni email
+ * @param {number|string} registrationData.id - Judge ID (required) - will be stored as judgeId
+ * @param {string} registrationData.alumniEmail - Alumni email (required)
  * @param {string} registrationData.alumniName - Alumni name (optional)
- * @param {string} registrationData.preferredDateTime - Preferred date and time
- * @param {string} registrationData.preferredLocation - Preferred location
+ * @param {string} registrationData.preferredDateTime - Preferred date and time (optional)
+ * @param {string} registrationData.preferredLocation - Preferred location (optional)
  * @returns {Promise<Object>} Registration confirmation
  */
 const registerAlumniAsJudge = async (eventId, registrationData) => {
@@ -160,19 +162,15 @@ const registerAlumniAsJudge = async (eventId, registrationData) => {
       throw new Error('Event ID is required and must be a valid string');
     }
 
-    const { alumniEmail, alumniName, preferredDateTime, preferredLocation } = registrationData;
+    const { id, alumniEmail, alumniName, preferredDateTime, preferredLocation } = registrationData;
 
     // Validate required fields
+    if (id === undefined || id === null || (typeof id !== 'number' && typeof id !== 'string')) {
+      throw new Error('Judge ID (id) is required and must be a number or string');
+    }
+
     if (!alumniEmail || typeof alumniEmail !== 'string' || !alumniEmail.trim()) {
       throw new Error('Alumni email is required');
-    }
-
-    if (!preferredDateTime || typeof preferredDateTime !== 'string' || !preferredDateTime.trim()) {
-      throw new Error('Preferred date and time is required');
-    }
-
-    if (!preferredLocation || typeof preferredLocation !== 'string' || !preferredLocation.trim()) {
-      throw new Error('Preferred location is required');
     }
 
     // Validate email format
@@ -187,13 +185,50 @@ const registerAlumniAsJudge = async (eventId, registrationData) => {
       throw new Error('Event not found');
     }
 
+    // Use id as judgeId (convert to string for consistency)
+    const judgeId = String(id).trim();
+
+    // Get existing judges array or initialize empty array
+    const existingJudges = event.judges || [];
+
+    // Check if judge already exists
+    const existingJudgeIndex = existingJudges.findIndex((j) => j.judgeId === judgeId);
+
+    let updatedJudges;
+    
+    if (existingJudgeIndex === -1) {
+      // Judge doesn't exist, add them with "approved" status
+      updatedJudges = [
+        ...existingJudges,
+        {
+          judgeId,
+          status: 'approved',
+        },
+      ];
+    } else {
+      // Judge exists, ensure status is always "approved"
+      updatedJudges = [...existingJudges];
+      updatedJudges[existingJudgeIndex] = {
+        ...updatedJudges[existingJudgeIndex],
+        status: 'approved',
+      };
+    }
+
+    // Update event with judges array (always set status to "approved")
+    await eventRepository.updateEvent(eventId, {
+      judges: updatedJudges,
+    });
+
+    // Get event title (support both old and new format)
+    const eventTitle = event.eventInfo?.name || event.title || 'Event';
+
     // Send email notification to admin
     try {
       await emailService.sendJudgeInterestNotification({
         alumniEmail,
         alumniName: alumniName || 'Alumni',
         eventId,
-        eventTitle: event.title,
+        eventTitle,
         preferredDateTime,
         preferredLocation,
       });
@@ -207,7 +242,7 @@ const registerAlumniAsJudge = async (eventId, registrationData) => {
       success: true,
       message: 'Registration successful. Admin has been notified.',
       eventId,
-      eventTitle: event.title,
+      eventTitle,
     };
   } catch (error) {
     throw error;
@@ -272,6 +307,106 @@ const getRubrics = async (eventId) => {
     }
 
     return event.rubrics || [];
+  } catch (error) {
+    throw error;
+  }
+};
+
+/**
+ * Update team details for an existing event
+ * TeamId is generated automatically and stored
+ * @param {string} eventId - Event ID
+ * @param {Object} teamData - Team data to update
+ * @param {string} teamData.teamName - Team name (required)
+ * @param {Array<string>} teamData.members - Team members (email IDs - 4 members, required)
+ * @param {number} teamData.slotPreference - Slot preference (slot number, optional)
+ * @returns {Promise<Object>} Updated event object with generated teamId
+ */
+const updateTeamDetails = async (eventId, teamData) => {
+  try {
+    if (!eventId || typeof eventId !== 'string' || !eventId.trim()) {
+      throw new Error('Event ID is required and must be a valid string');
+    }
+
+    const { teamName, members, slotPreference } = teamData;
+
+    // Validate required fields
+    if (!teamName || typeof teamName !== 'string' || !teamName.trim()) {
+      throw new Error('Team name is required');
+    }
+
+    if (!members || !Array.isArray(members) || members.length !== 4) {
+      throw new Error('Team must have exactly 4 members');
+    }
+
+    // Validate email format for all members
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    for (const member of members) {
+      if (!member || typeof member !== 'string' || !member.trim()) {
+        throw new Error('All team members must be valid email addresses');
+      }
+      if (!emailRegex.test(member.trim())) {
+        throw new Error(`Invalid email format: ${member}`);
+      }
+    }
+
+    // Validate slotPreference if provided
+    if (slotPreference !== undefined && slotPreference !== null) {
+      if (typeof slotPreference !== 'number' || slotPreference <= 0) {
+        throw new Error('Slot preference must be a positive number');
+      }
+    }
+
+    // Get event to validate
+    const event = await eventRepository.getEventById(eventId);
+    if (!event) {
+      throw new Error('Event not found');
+    }
+
+    // Validate slot exists if slotPreference is provided
+    if (slotPreference !== undefined && slotPreference !== null) {
+      const slots = event.slots || [];
+      const slotExists = slots.some((slot) => slot.slotNumber === slotPreference);
+      if (!slotExists) {
+        throw new Error(`Slot with number ${slotPreference} does not exist in the event`);
+      }
+    }
+
+    // Get existing teams array or initialize empty array
+    const existingTeams = event.teams || [];
+
+    // Generate teamId automatically
+    const generatedTeamId = generateTeamId();
+
+    // Prepare team object with generated teamId
+    const newTeam = {
+      teamId: generatedTeamId,
+      teamName: teamName.trim(),
+      members: members.map((email) => email.trim()),
+    };
+
+    // Add slotPreference if provided
+    if (slotPreference !== undefined && slotPreference !== null) {
+      newTeam.slotPreference = slotPreference;
+    }
+
+    // Add new team to teams array (always create new team with generated ID)
+    const updatedTeams = [...existingTeams, newTeam];
+
+    // Update event with updated teams array
+    const updatedEvent = await eventRepository.updateEvent(eventId, {
+      teams: updatedTeams,
+    });
+
+    if (!updatedEvent) {
+      throw new Error('Failed to update team details');
+    }
+
+    // Return the updated event along with the generated teamId
+    return {
+      ...updatedEvent,
+      teamId: generatedTeamId,
+    };
   } catch (error) {
     throw error;
   }
@@ -395,8 +530,9 @@ const submitScores = async (eventId, judgeId, teamId, scores) => {
 
 /**
  * Get all events where a user is assigned as a judge
+ * Returns events where the judge_id is present, regardless of status (approved or pending)
  * @param {string} userId - User ID (judgeId)
- * @returns {Promise<Array>} Array of events where the user is a judge
+ * @returns {Promise<Array>} Array of events where the user is a judge (status can be anything)
  */
 const getEventsJudgedBy = async (userId) => {
   try {
@@ -408,13 +544,14 @@ const getEventsJudgedBy = async (userId) => {
     const allEvents = await eventRepository.getAllEvents();
 
     // Filter events where the user is assigned as a judge
+    // Returns events regardless of judge status (approved or pending)
     const filteredEvents = allEvents.filter((event) => {
       // Check if event has judges array
       if (!event.judges || !Array.isArray(event.judges)) {
         return false;
       }
 
-      // Check if any judge matches the userId
+      // Check if any judge matches the userId (status can be anything)
       return event.judges.some((judge) => judge.judgeId === userId.trim());
     });
 
@@ -580,6 +717,7 @@ module.exports = {
   getRubricsForJudge,
   getTeams,
   getRubrics,
+  updateTeamDetails,
   submitScores,
   getLeaderboard,
 };

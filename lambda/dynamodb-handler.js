@@ -394,6 +394,7 @@ exports.handler = async (event) => {
           teams: body.teams || [],
           rubrics: body.rubrics || [],
           judges: body.judges || [],
+          slots: body.slots || [],
           scores: body.scores || [],
           createdAt: now,
           updatedAt: now,
@@ -448,7 +449,7 @@ exports.handler = async (event) => {
         const expressionAttributeNames = {};
         const expressionAttributeValues = {};
         
-        const updateFields = ['title', 'description', 'photos', 'rubric', 'slots', 'teams'];
+        const updateFields = ['title', 'description', 'photos', 'rubric', 'slots', 'teams', 'judges', 'rubrics', 'eventInfo'];
         updateFields.forEach((field, index) => {
           if (body[field] !== undefined) {
             const nameKey = `#attr${index}`;

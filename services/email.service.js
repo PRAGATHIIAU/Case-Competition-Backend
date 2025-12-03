@@ -41,8 +41,8 @@ const getTransporter = () => {
  * @param {string} params.alumniName - Name of the alumni (optional)
  * @param {string} params.eventId - Event ID
  * @param {string} params.eventTitle - Event title
- * @param {string} params.preferredDateTime - Preferred date and time
- * @param {string} params.preferredLocation - Preferred location
+ * @param {string} params.preferredDateTime - Preferred date and time (optional)
+ * @param {string} params.preferredLocation - Preferred location (optional)
  * @returns {Promise<Object>} Email send response
  */
 const sendJudgeInterestNotification = async ({
@@ -90,8 +90,8 @@ const sendJudgeInterestNotification = async ({
           
           <h3>Preferences:</h3>
           <ul>
-            <li><strong>Preferred Date/Time:</strong> ${preferredDateTime}</li>
-            <li><strong>Preferred Location:</strong> ${preferredLocation}</li>
+            <li><strong>Preferred Date/Time:</strong> ${preferredDateTime || 'Not specified'}</li>
+            <li><strong>Preferred Location:</strong> ${preferredLocation || 'Not specified'}</li>
           </ul>
           
           <p>Please review and contact the alumni to confirm their participation.</p>
@@ -113,8 +113,8 @@ Alumni Details:
 - Email: ${alumniEmail}
 
 Preferences:
-- Preferred Date/Time: ${preferredDateTime}
-- Preferred Location: ${preferredLocation}
+- Preferred Date/Time: ${preferredDateTime || 'Not specified'}
+- Preferred Location: ${preferredLocation || 'Not specified'}
 
 Please review and contact the alumni to confirm their participation.
     `;

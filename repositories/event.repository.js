@@ -15,6 +15,14 @@ const generateEventId = () => {
 };
 
 /**
+ * Generate a unique team ID
+ * @returns {string} Unique team ID
+ */
+const generateTeamId = () => {
+  return `TEAM-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+};
+
+/**
  * Make API Gateway request to DynamoDB Lambda
  * @param {string} operation - Operation name (get, getAll, create, update, delete)
  * @param {Object} data - Request data
@@ -223,4 +231,5 @@ module.exports = {
   deleteEvent,
   updateScores,
   generateEventId,
+  generateTeamId,
 };
