@@ -88,6 +88,27 @@ const getConnectionRequestsByMentor = async (mentorId) => {
 };
 
 /**
+ * Get all connection requests sent by a student
+ * @param {string} studentId - Student ID
+ * @returns {Promise<Array>} Array of connection request objects
+ */
+const getConnectionRequestsByStudent = async (studentId) => {
+  const query = `
+    SELECT id, student_id, mentor_id, message, status, created_at, updated_at
+    FROM ${ConnectionRequestModel.TABLE_NAME}
+    WHERE student_id = $1
+    ORDER BY created_at DESC
+  `;
+
+  try {
+    const result = await pool.query(query, [studentId]);
+    return result.rows;
+  } catch (error) {
+    throw error;
+  }
+};
+
+/**
  * Get connection request by ID
  * @param {number} requestId - Connection request ID
  * @returns {Promise<Object|null>} Connection request object or null if not found
@@ -131,6 +152,7 @@ module.exports = {
   createConnectionRequest,
   updateConnectionRequestStatus,
   getConnectionRequestsByMentor,
+  getConnectionRequestsByStudent,
   getConnectionRequestById,
   deleteConnectionRequest,
 };

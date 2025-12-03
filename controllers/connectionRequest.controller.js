@@ -205,6 +205,53 @@ const getConnectionRequestsByMentor = async (req, res) => {
 };
 
 /**
+ * GET /api/connection-requests/student/:studentId
+ * Get all connection requests sent by a student
+ */
+const getConnectionRequestsByStudent = async (req, res) => {
+  console.log(`-> triggered endpoint GET /api/connection-requests/student/:studentId`);
+  try {
+    const { studentId } = req.params;
+
+    if (!studentId || typeof studentId !== 'string' || !studentId.trim()) {
+      console.log('-> finished endpoint execution GET /api/connection-requests/student/:studentId');
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid student ID',
+        error: 'Student ID is required and must be a valid string',
+      });
+    }
+
+    const requests = await connectionRequestService.getConnectionRequestsByStudent(studentId.trim());
+
+    res.status(200).json({
+      success: true,
+      message: 'Connection requests retrieved successfully',
+      data: requests,
+      count: requests.length,
+    });
+    console.log('-> finished endpoint execution GET /api/connection-requests/student/:studentId');
+  } catch (error) {
+    console.log('-> finished endpoint execution GET /api/connection-requests/student/:studentId');
+    console.error('Get connection requests by student error:', error);
+
+    if (error.message.includes('required') || error.message.includes('Invalid')) {
+      return res.status(400).json({
+        success: false,
+        message: 'Validation error',
+        error: error.message,
+      });
+    }
+
+    res.status(500).json({
+      success: false,
+      message: 'Failed to retrieve connection requests',
+      error: error.message || 'An error occurred while retrieving connection requests',
+    });
+  }
+};
+
+/**
  * DELETE /api/connection-requests/:id
  * Delete a connection request
  */
@@ -263,6 +310,7 @@ module.exports = {
   acceptConnectionRequest,
   declineConnectionRequest,
   getConnectionRequestsByMentor,
+  getConnectionRequestsByStudent,
   deleteConnectionRequest,
 };
 
