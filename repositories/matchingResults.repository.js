@@ -139,6 +139,7 @@ const getAssignedMentor = async (studentId) => {
 
 /**
  * Get similarity scores for a student
+ * Returns only scores from the latest batch
  * @param {string} studentId - Student ID
  * @param {number} limit - Maximum number of results
  * @returns {Promise<Array>} Array of similarity scores
@@ -154,8 +155,9 @@ const getStudentSimilarityScores = async (studentId, limit = 10) => {
       u.email as mentor_email
     FROM ${MatchingResultsModel.NIGHTLY_SIMILARITY_SCORES_TABLE} s
     JOIN users u ON u.id = s.mentor_id
-    WHERE s.student_id = $1
-    ORDER BY s.similarity_score DESC, s.batch_timestamp DESC
+    WHERE s.student_id = $1 
+      AND s.batch_timestamp = (SELECT MAX(batch_timestamp) FROM ${MatchingResultsModel.NIGHTLY_SIMILARITY_SCORES_TABLE} WHERE student_id = $1)
+    ORDER BY s.similarity_score DESC
     LIMIT $2
   `;
 
@@ -164,6 +166,68 @@ const getStudentSimilarityScores = async (studentId, limit = 10) => {
     return result.rows;
   } catch (error) {
     console.error('Error getting student similarity scores:', error);
+    throw error;
+  }
+};
+
+/**
+ * Get similarity scores for a mentor
+ * Returns only scores from the latest batch
+ * @param {number} mentorId - Mentor ID
+ * @param {number} limit - Maximum number of results (optional, defaults to all)
+ * @returns {Promise<Array>} Array of similarity scores with student info
+ */
+const getMentorSimilarityScores = async (mentorId, limit = null) => {
+  // First, get the latest batch timestamp for this mentor
+  const latestBatchQuery = `
+    SELECT MAX(batch_timestamp) as latest_batch
+    FROM ${MatchingResultsModel.NIGHTLY_SIMILARITY_SCORES_TABLE}
+    WHERE mentor_id = $1
+  `;
+
+  let query;
+  let params;
+
+  if (limit && limit > 0) {
+    query = `
+      SELECT 
+        s.mentor_id,
+        s.student_id,
+        s.similarity_score,
+        s.batch_timestamp,
+        st.name as student_name,
+        st.email as student_email
+      FROM ${MatchingResultsModel.NIGHTLY_SIMILARITY_SCORES_TABLE} s
+      LEFT JOIN students st ON st.student_id::text = s.student_id
+      WHERE s.mentor_id = $1 
+        AND s.batch_timestamp = (SELECT MAX(batch_timestamp) FROM ${MatchingResultsModel.NIGHTLY_SIMILARITY_SCORES_TABLE} WHERE mentor_id = $1)
+      ORDER BY s.similarity_score DESC
+      LIMIT $2
+    `;
+    params = [mentorId, limit];
+  } else {
+    query = `
+      SELECT 
+        s.mentor_id,
+        s.student_id,
+        s.similarity_score,
+        s.batch_timestamp,
+        st.name as student_name,
+        st.email as student_email
+      FROM ${MatchingResultsModel.NIGHTLY_SIMILARITY_SCORES_TABLE} s
+      LEFT JOIN students st ON st.student_id::text = s.student_id
+      WHERE s.mentor_id = $1 
+        AND s.batch_timestamp = (SELECT MAX(batch_timestamp) FROM ${MatchingResultsModel.NIGHTLY_SIMILARITY_SCORES_TABLE} WHERE mentor_id = $1)
+      ORDER BY s.similarity_score DESC
+    `;
+    params = [mentorId];
+  }
+
+  try {
+    const result = await pool.query(query, params);
+    return result.rows;
+  } catch (error) {
+    console.error('Error getting mentor similarity scores:', error);
     throw error;
   }
 };
@@ -201,6 +265,7 @@ module.exports = {
   saveMentorStudentMappings,
   getAssignedMentor,
   getStudentSimilarityScores,
+  getMentorSimilarityScores,
   getMentorMappings,
 };
 
