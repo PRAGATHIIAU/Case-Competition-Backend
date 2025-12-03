@@ -822,6 +822,15 @@ const getUserWithProfile = async (userId) => {
  * @param {string} password - User password
  * @returns {Promise<Object>} User object and token (merged from RDS + DynamoDB)
  */
+const normalizeBooleanFlag = (value) => {
+  if (value === undefined || value === null) return { value: false, explicit: false };
+  if (typeof value === 'string') {
+    const normalized = ['true', 'yes', '1'].includes(value.trim().toLowerCase());
+    return { value: normalized, explicit: true };
+  }
+  return { value: Boolean(value), explicit: true };
+};
+
 const login = async (email, password) => {
   try {
     // Validate input
@@ -860,8 +869,31 @@ const login = async (email, password) => {
       { expiresIn: '7d' }
     );
 
+    const userRole = (mergedUser?.role || mergedUser?.userType || '').toLowerCase();
+    const isStudent = !userRole || userRole === 'student';
+    const willingMentor = normalizeBooleanFlag(mergedUser.willing_to_be_mentor);
+    const willingJudge = normalizeBooleanFlag(mergedUser.willing_to_be_judge);
+    const willingSpeaker = normalizeBooleanFlag(mergedUser.willing_to_be_speaker);
+    const hasAnyRole = willingMentor.value || willingJudge.value || willingSpeaker.value;
+    const inferredAlumni = isStudent && hasAnyRole;
+
+    const normalizedUser = {
+      ...mergedUser,
+      role: inferredAlumni ? 'alumni' : mergedUser.role,
+      userType: inferredAlumni ? 'alumni' : mergedUser.userType,
+      isMentor: normalizeBooleanFlag(mergedUser.isMentor).explicit
+        ? normalizeBooleanFlag(mergedUser.isMentor).value
+        : willingMentor.value,
+      isJudge: normalizeBooleanFlag(mergedUser.isJudge).explicit
+        ? normalizeBooleanFlag(mergedUser.isJudge).value
+        : willingJudge.value,
+      isSpeaker: normalizeBooleanFlag(mergedUser.isSpeaker).explicit
+        ? normalizeBooleanFlag(mergedUser.isSpeaker).value
+        : willingSpeaker.value,
+    };
+
     return {
-      user: mergedUser,
+      user: normalizedUser,
       token,
     };
   } catch (error) {

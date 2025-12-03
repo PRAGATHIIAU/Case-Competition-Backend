@@ -7,6 +7,7 @@ const { authenticateAdmin, verifyAdmin } = require('../middleware/adminAuth');
 /**
  * Admin Routes
  * POST /admin/login - Admin login
+ * POST /admin/signup - Admin/Faculty signup
  * GET /admin/profile - Get admin profile (requires authentication)
  * GET /admin/students - Get all students (requires authentication)
  * GET /admin/alumni - Get all alumni (requires authentication)
@@ -26,6 +27,7 @@ const { authenticateAdmin, verifyAdmin } = require('../middleware/adminAuth');
 
 // POST /admin/login (no authentication required)
 router.post('/login', adminController.login);
+router.post('/signup', adminController.signup);
 
 // All other routes require admin authentication
 router.get('/profile', authenticateAdmin, verifyAdmin, adminController.getProfile);
@@ -38,6 +40,7 @@ router.put('/:id/role', authenticateAdmin, verifyAdmin, adminController.updateRo
 // Admin analytics routes
 router.get('/analytics/basic-stats', authenticateAdmin, verifyAdmin, analyticsController.getBasicStats);
 router.get('/analytics/student-engagement', authenticateAdmin, verifyAdmin, analyticsController.getStudentEngagement);
+router.get('/analytics/mentor-engagement', authenticateAdmin, verifyAdmin, analyticsController.getMentorEngagement);
 router.get('/analytics/alumni-engagement', authenticateAdmin, verifyAdmin, analyticsController.getAlumniEngagement);
 router.get('/analytics/inactive-alumni', authenticateAdmin, verifyAdmin, analyticsController.getInactiveAlumni);
 router.get('/analytics/feedback-summary', authenticateAdmin, verifyAdmin, analyticsController.getFeedbackSummary);

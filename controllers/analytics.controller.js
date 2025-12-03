@@ -73,6 +73,43 @@ const getStudentEngagement = async (req, res) => {
 };
 
 /**
+ * GET /admin/analytics/mentor-engagement
+ *
+ * Returns mentor engagement statistics:
+ * {
+ *   "totalMentors": number,
+ *   "activeMentors": number,
+ *   "inactiveMentors": number,
+ *   "pendingRequests": number,
+ *   "acceptedRequests": number
+ * }
+ */
+const getMentorEngagement = async (req, res) => {
+  console.log('-> triggered endpoint GET /admin/analytics/mentor-engagement');
+  try {
+    const stats = await analyticsService.getMentorEngagement();
+
+    console.log('-> finished endpoint execution GET /admin/analytics/mentor-engagement');
+    return res.status(200).json({
+      totalMentors: stats.totalMentors,
+      activeMentors: stats.activeMentors,
+      inactiveMentors: stats.inactiveMentors,
+      pendingRequests: stats.pendingRequests,
+      acceptedRequests: stats.acceptedRequests,
+      rejectedRequests: stats.rejectedRequests,
+    });
+  } catch (error) {
+    console.log('-> finished endpoint execution GET /admin/analytics/mentor-engagement');
+    console.error('Get mentor engagement analytics error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to retrieve mentor engagement statistics',
+      error: error.message || 'An error occurred while retrieving mentor engagement stats',
+    });
+  }
+};
+
+/**
  * GET /admin/analytics/alumni-engagement
  *
  * Returns alumni engagement statistics for the admin dashboard:
@@ -343,6 +380,7 @@ const getAdminActivity = async (req, res) => {
 module.exports = {
   getBasicStats,
   getStudentEngagement,
+  getMentorEngagement,
   getAlumniEngagement,
   getInactiveAlumni,
   getFeedbackSummary,

@@ -94,6 +94,79 @@ const login = async (email, password) => {
 };
 
 /**
+ * Create a new admin/faculty account
+ * @param {Object} payload
+ * @param {string} payload.email
+ * @param {string} payload.password
+ * @param {string} payload.firstName
+ * @param {string} payload.lastName
+ * @param {'admin'|'faculty'} [payload.role='admin']
+ * @returns {Promise<Object>} Admin object and token
+ */
+const createAdminAccount = async ({ email, password, firstName, lastName, role = ADMIN_ROLES.ADMIN }) => {
+  try {
+    const normalizedEmail = (email || '').trim().toLowerCase();
+    if (!normalizedEmail) {
+      throw new Error('Email is required');
+    }
+
+    if (!password || password.length < 6) {
+      throw new Error('Password must be at least 6 characters long');
+    }
+
+    const trimmedFirstName = (firstName || '').trim();
+    const trimmedLastName = (lastName || '').trim();
+
+    if (!trimmedFirstName) {
+      throw new Error('First name is required');
+    }
+
+    if (!trimmedLastName) {
+      throw new Error('Last name is required');
+    }
+
+    const normalizedRole = Object.values(ADMIN_ROLES).includes((role || '').toLowerCase())
+      ? (role || '').toLowerCase()
+      : ADMIN_ROLES.ADMIN;
+
+    const existing = await adminRepository.getAdminByEmail(normalizedEmail);
+    if (existing) {
+      throw new Error('Admin already exists');
+    }
+
+    const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
+    const admin = await adminRepository.createAdmin({
+      email: normalizedEmail,
+      passwordHash,
+      firstName: trimmedFirstName,
+      lastName: trimmedLastName,
+      role: normalizedRole,
+    });
+
+    const token = jwt.sign(
+      { id: admin.id, email: admin.email, role: admin.role },
+      JWT_SECRET,
+      { expiresIn: '7d' }
+    );
+
+    return {
+      admin: {
+        id: admin.id,
+        email: admin.email,
+        first_name: admin.first_name,
+        last_name: admin.last_name,
+        role: admin.role,
+        created_at: admin.created_at,
+        updated_at: admin.updated_at,
+      },
+      token,
+    };
+  } catch (error) {
+    throw error;
+  }
+};
+
+/**
  * Get admin profile
  * @param {number} adminId - Admin ID
  * @returns {Promise<Object>} Admin profile object
@@ -204,6 +277,7 @@ const updateEventStatus = async (eventId, status) => {
 
 module.exports = {
   login,
+  createAdminAccount,
   getProfile,
   getAllStudents,
   getAllAlumni,

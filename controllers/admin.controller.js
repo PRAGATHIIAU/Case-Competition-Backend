@@ -57,6 +57,63 @@ const login = async (req, res) => {
 };
 
 /**
+ * POST /admin/signup
+ * Create a new admin/faculty account
+ */
+const signup = async (req, res) => {
+  try {
+    const { email, password, firstName, lastName, first_name, last_name, role } = req.body || {};
+
+    const resolvedFirstName = (firstName || first_name || '').trim();
+    const resolvedLastName = (lastName || last_name || '').trim();
+
+    if (!email || !password || !resolvedFirstName || !resolvedLastName) {
+      return res.status(400).json({
+        success: false,
+        message: 'Email, password, firstName, and lastName are required',
+      });
+    }
+
+    const result = await adminService.createAdminAccount({
+      email,
+      password,
+      firstName: resolvedFirstName,
+      lastName: resolvedLastName,
+      role,
+    });
+
+    res.status(201).json({
+      success: true,
+      message: 'Admin account created successfully',
+      data: result,
+    });
+  } catch (error) {
+    if (error.message === 'Admin already exists') {
+      return res.status(409).json({
+        success: false,
+        message: 'Admin already exists',
+        error: error.message,
+      });
+    }
+
+    if (error.message === 'Invalid role' || error.message.includes('required')) {
+      return res.status(400).json({
+        success: false,
+        message: 'Validation error',
+        error: error.message,
+      });
+    }
+
+    console.error('Admin signup error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to create admin account',
+      error: error.message || 'An error occurred during admin signup',
+    });
+  }
+};
+
+/**
  * GET /admin/profile
  * Get admin profile (requires authentication)
  */
@@ -295,6 +352,7 @@ const updateRole = async (req, res) => {
 
 module.exports = {
   login,
+  signup,
   getProfile,
   getStudents,
   getAlumni,

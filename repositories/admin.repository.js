@@ -71,5 +71,29 @@ module.exports = {
       throw error;
     }
   },
+  /**
+   * Create a new admin/faculty account
+   * @param {Object} adminData
+   * @param {string} adminData.email
+   * @param {string} adminData.passwordHash
+   * @param {string} adminData.firstName
+   * @param {string} adminData.lastName
+   * @param {'admin'|'faculty'} adminData.role
+   * @returns {Promise<Object>}
+   */
+  createAdmin: async ({ email, passwordHash, firstName, lastName, role }) => {
+    const query = `
+      INSERT INTO ${AdminModel.TABLE_NAME} (email, password_hash, first_name, last_name, role)
+      VALUES ($1, $2, $3, $4, $5)
+      RETURNING id, email, first_name, last_name, role, created_at, updated_at
+    `;
+
+    try {
+      const result = await pool.query(query, [email, passwordHash, firstName, lastName, role]);
+      return result.rows[0];
+    } catch (error) {
+      throw error;
+    }
+  },
 };
 
