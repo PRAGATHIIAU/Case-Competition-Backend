@@ -154,6 +154,81 @@ Please review and contact the alumni to confirm their participation.
 };
 
 /**
+ * Find the most common interest between mentor and student
+ * Checks skills, major, projects, and relevant coursework
+ * @param {Object} mentor - Mentor object with profile data
+ * @param {Object} student - Student object with profile data
+ * @returns {string|null} Most common interest or null if none found
+ */
+const findMostCommonInterest = (mentor, student) => {
+  // Normalize strings for comparison (lowercase, trim)
+  const normalize = (str) => String(str || '').toLowerCase().trim();
+  
+  // Check skills first (most specific)
+  const mentorSkills = (mentor.skills || []).map(s => normalize(s));
+  const studentSkills = (student.skills || []).map(s => normalize(s));
+  
+  // Find common skills
+  const commonSkills = mentorSkills.filter(skill => 
+    studentSkills.some(studentSkill => 
+      studentSkill.includes(skill) || skill.includes(studentSkill) ||
+      studentSkill === skill
+    )
+  );
+  
+  if (commonSkills.length > 0) {
+    // Return the first common skill (most relevant)
+    return commonSkills[0].charAt(0).toUpperCase() + commonSkills[0].slice(1);
+  }
+  
+  // Check major
+  const mentorMajor = normalize(mentor.major || '');
+  const studentMajor = normalize(student.major || '');
+  
+  if (mentorMajor && studentMajor && 
+      (mentorMajor.includes(studentMajor) || studentMajor.includes(mentorMajor) || mentorMajor === studentMajor)) {
+    return studentMajor.charAt(0).toUpperCase() + studentMajor.slice(1);
+  }
+  
+  // Check relevant coursework (for students)
+  const studentCoursework = (student.relevant_coursework || []).map(c => normalize(c));
+  const courseworkMatch = studentCoursework.find(course => 
+    mentorSkills.some(skill => 
+      course.includes(skill) || skill.includes(course)
+    )
+  );
+  
+  if (courseworkMatch) {
+    return courseworkMatch.charAt(0).toUpperCase() + courseworkMatch.slice(1);
+  }
+  
+  // Check if mentor has experiences/projects that match student interests
+  // Extract technologies from mentor projects
+  const mentorProjectTechs = [];
+  if (mentor.projects && Array.isArray(mentor.projects)) {
+    mentor.projects.forEach(project => {
+      if (typeof project === 'object' && project !== null) {
+        Object.values(project).forEach(value => {
+          if (typeof value === 'string') {
+            const techs = value.toLowerCase().split(/[\s,]+/);
+            mentorProjectTechs.push(...techs);
+          }
+        });
+      }
+    });
+  }
+  
+  // Check if any student skill matches mentor project techs
+  for (const studentSkill of studentSkills) {
+    if (mentorProjectTechs.some(tech => tech.includes(studentSkill) || studentSkill.includes(tech))) {
+      return studentSkill.charAt(0).toUpperCase() + studentSkill.slice(1);
+    }
+  }
+  
+  return null;
+};
+
+/**
  * Extract brief summary from mentee profile (1-2 lines max)
  * @param {Object} mentee - Mentee object with profile data
  * @returns {string} Brief summary text
@@ -207,66 +282,69 @@ const escapeHtml = (text) => {
 };
 
 /**
- * Format email body for mentor notification
+ * Format email body for mentor notification (single student)
  * @param {Object} params - Email parameters
  * @param {string} params.mentorName - Mentor's name
- * @param {Array} params.mentees - Array of mentee objects with full profile data
+ * @param {Object} params.mentor - Full mentor object with profile data
+ * @param {Object} params.student - Single student object with full profile data
+ * @param {string} params.commonInterest - Most common interest between mentor and student
  * @returns {Object} Object with html and text email bodies
  */
-const formatMentorNotificationEmail = ({ mentorName, mentees }) => {
-  // Build mentee list HTML
-  let menteeListHtml = '';
-  let menteeListText = '';
+const formatMentorNotificationEmail = ({ mentorName, mentor, student, commonInterest }) => {
+  const studentName = student.name || 'a student';
+  const linkedinUrl = student.linkedin_url || null;
+  const linkedinDisplay = linkedinUrl 
+    ? `<a href="${escapeHtml(linkedinUrl)}" style="color: #0077b5; text-decoration: none;">LinkedIn Profile</a>`
+    : 'Not provided';
   
-  mentees.forEach((mentee, index) => {
-    const summary = extractMenteeSummary(mentee);
-    const linkedinUrl = mentee.linkedin_url || 'Not provided';
-    const linkedinDisplay = linkedinUrl !== 'Not provided' 
-      ? `<a href="${escapeHtml(linkedinUrl)}">${escapeHtml(linkedinUrl)}</a>`
-      : 'Not provided';
-    
-    const menteeName = mentee.name || 'Unknown Student';
-    
-    menteeListHtml += `
-      <li style="margin-bottom: 15px;">
-        <strong>${escapeHtml(menteeName)}</strong><br>
-        <span style="color: #666; font-size: 14px;">Summary: ${escapeHtml(summary)}</span><br>
-        <span style="color: #666; font-size: 14px;">LinkedIn: ${linkedinDisplay}</span>
-      </li>
-    `;
-    
-    menteeListText += `
-• ${menteeName}
-  - Summary: ${summary}
-  - LinkedIn: ${linkedinUrl}
-`;
-  });
+  // Build personalized greeting based on common interest
+  const greetingHtml = `Howdy ${escapeHtml(mentorName)}`;
+  const greetingText = `Howdy ${mentorName}`;
+  
+  let interestPhraseHtml = '';
+  let interestPhraseText = '';
+  
+  if (commonInterest) {
+    interestPhraseHtml = `since you work in ${escapeHtml(commonInterest)}`;
+    interestPhraseText = `since you work in ${commonInterest}`;
+  } else {
+    // Fallback: try to use mentor's field/domain
+    const mentorField = mentor.major || 
+                        (mentor.skills && mentor.skills.length > 0 ? mentor.skills[0] : null) ||
+                        'your field';
+    interestPhraseHtml = `based on your background in ${escapeHtml(mentorField)}`;
+    interestPhraseText = `based on your background in ${mentorField}`;
+  }
   
   const htmlBody = `
     <html>
-      <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
-        <p>Hi ${escapeHtml(mentorName)},</p>
+      <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+        <p style="font-size: 16px;">${greetingHtml}, ${interestPhraseHtml}, would you mentor ${escapeHtml(studentName)}?</p>
         
-        <p>Based on your profile and interests, we have identified the following students who closely align with your background. Please review their details and confirm if you're willing to mentor them.</p>
+        <div style="background-color: #f5f5f5; padding: 15px; border-radius: 5px; margin: 20px 0;">
+          <h3 style="margin-top: 0; color: #333;">About ${escapeHtml(studentName)}:</h3>
+          ${student.major ? `<p><strong>Major:</strong> ${escapeHtml(student.major)}</p>` : ''}
+          ${student.skills && student.skills.length > 0 ? `<p><strong>Skills:</strong> ${escapeHtml(student.skills.slice(0, 5).join(', '))}</p>` : ''}
+          ${student.aspirations ? `<p><strong>Aspirations:</strong> ${escapeHtml(student.aspirations.substring(0, 200))}${student.aspirations.length > 200 ? '...' : ''}</p>` : ''}
+          <p><strong>LinkedIn:</strong> ${linkedinDisplay}</p>
+        </div>
         
-        <ul style="list-style-type: none; padding-left: 0;">
-          ${menteeListHtml}
-        </ul>
+        <p style="margin-top: 20px;">Please reply to this email if you're interested in mentoring ${escapeHtml(studentName)}.</p>
         
-        <p>Please reply to this email or click the provided link to confirm your participation as a mentor.</p>
-        
-        <p>Thank you,<br>Mentorship Program Team</p>
+        <p style="margin-top: 20px;">Thank you,<br>Mentorship Program Team</p>
       </body>
     </html>
   `;
   
-  const textBody = `Hi ${mentorName},
+  const textBody = `${greetingText}, ${interestPhraseText}, would you mentor ${studentName}?
 
-Based on your profile and interests, we have identified the following students who closely align with your background. Please review their details and confirm if you're willing to mentor them.
+About ${studentName}:
+${student.major ? `Major: ${student.major}` : ''}
+${student.skills && student.skills.length > 0 ? `Skills: ${student.skills.slice(0, 5).join(', ')}` : ''}
+${student.aspirations ? `Aspirations: ${student.aspirations.substring(0, 200)}${student.aspirations.length > 200 ? '...' : ''}` : ''}
+LinkedIn: ${linkedinUrl || 'Not provided'}
 
-${menteeListText}
-
-Please reply to this email or click the provided link to confirm your participation as a mentor.
+Please reply to this email if you're interested in mentoring ${studentName}.
 
 Thank you,
 Mentorship Program Team`;
@@ -275,16 +353,16 @@ Mentorship Program Team`;
 };
 
 /**
- * Send mentor notification email about assigned mentees
+ * Send mentor notification email about a single assigned student
  * @param {Object} params - Email parameters
- * @param {Object} params.mentor - Mentor object (name, email, etc.)
- * @param {Array} params.mentees - Array of mentee objects with full profile data (name, bio/summary, LinkedIn handle)
+ * @param {Object} params.mentor - Mentor object (name, email, and full profile data)
+ * @param {Object} params.student - Single student object with full profile data
  * @param {boolean} params.testing - If true, send to ADMIN_EMAIL instead of mentor email
  * @returns {Promise<Object>} Email send response
  */
 const sendMentorNotification = async ({
   mentor,
-  mentees,
+  student,
   testing = false,
 }) => {
   if (!ADMIN_EMAIL || !FROM_EMAIL) {
@@ -297,8 +375,8 @@ const sendMentorNotification = async ({
     throw new Error('Mentor name is required');
   }
 
-  if (!mentees || !Array.isArray(mentees) || mentees.length === 0) {
-    throw new Error('At least one mentee is required');
+  if (!student) {
+    throw new Error('Student is required');
   }
 
   // Determine recipient email
@@ -313,12 +391,18 @@ const sendMentorNotification = async ({
   try {
     const emailTransporter = getTransporter();
     
-    const subject = 'Mentorship Request – Review Assigned Students';
+    // Find most common interest between mentor and student
+    const commonInterest = findMostCommonInterest(mentor, student);
+    
+    const studentName = student.name || 'a student';
+    const subject = `Mentorship Request – Would you mentor ${studentName}?`;
     
     // Format email body
     const { htmlBody, textBody } = formatMentorNotificationEmail({
       mentorName: mentor.name,
-      mentees: mentees,
+      mentor: mentor,
+      student: student,
+      commonInterest: commonInterest,
     });
 
     const mailOptions = {
@@ -343,6 +427,8 @@ const sendMentorNotification = async ({
       success: true,
       recipient: recipientEmail,
       testing: testing,
+      studentName: studentName,
+      commonInterest: commonInterest,
     };
   } catch (error) {
     console.error('Email sending error:', error);
@@ -367,6 +453,7 @@ module.exports = {
   sendMentorNotification,
   extractMenteeSummary,
   formatMentorNotificationEmail,
+  findMostCommonInterest,
   ADMIN_EMAIL,
   FROM_EMAIL,
 };

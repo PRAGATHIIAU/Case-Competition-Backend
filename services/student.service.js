@@ -317,6 +317,8 @@ const signup = async (studentData, file) => {
       relevant_coursework: [],
       linkedin_url: null,
       github_url: null,
+      contact: null,
+      location: null,
     };
     
     let resumeUrl = null;
@@ -345,6 +347,8 @@ const signup = async (studentData, file) => {
           relevantCourseworkCount: parsedResumeData.relevant_coursework?.length || 0,
           linkedinUrl: parsedResumeData.linkedin_url || 'Not found',
           githubUrl: parsedResumeData.github_url || 'Not found',
+          contact: parsedResumeData.contact || 'Not found',
+          location: parsedResumeData.location || 'Not found',
         });
       } catch (parseError) {
         console.error('⚠️ Failed to parse resume, continuing with signup:', {
@@ -399,10 +403,21 @@ const signup = async (studentData, file) => {
       experiences,
       achievements,
       relevant_coursework,
+      mentorship_interest,
+      mentor_preference,
     } = studentData;
 
     // Merge LinkedIn URL - manual input takes precedence over parsed
     const mergedLinkedInUrl = linkedin_url?.trim() || parsedResumeData.linkedin_url || null;
+    
+    // Merge contact - manual input takes precedence over parsed
+    const mergedContact = (contact !== undefined && contact !== null && contact?.trim())
+      ? contact.trim()
+      : (parsedResumeData.contact || null);
+    
+    // Merge location - only from parsed resume (stored in DynamoDB)
+    // Note: Location can be added to request body in the future if needed
+    const mergedLocation = parsedResumeData.location || null;
 
     // Merge manually provided data with parsed resume data
     // Manually provided data takes precedence over parsed data
@@ -444,7 +459,7 @@ const signup = async (studentData, file) => {
       name,
       email,
       password: hashedPassword,
-      contact,
+      contact: mergedContact, // Use merged contact (from manual input or parsed resume)
       linkedin_url: mergedLinkedInUrl,
       major: mergedMajor,
       grad_year: mergedGradYear,
@@ -475,12 +490,20 @@ const signup = async (studentData, file) => {
       grad_year_type: typeof newStudent.grad_year,
     });
 
+    // Handle mentorship_interest and mentor_preference
+    const mergedMentorshipInterest = mentorship_interest !== undefined 
+      ? (mentorship_interest === true || mentorship_interest === 'true')
+      : false;
+    
+    const mergedMentorPreference = mentor_preference?.trim() || null;
+
     // Prepare DynamoDB profile data (if any profile fields provided)
     // Include parsed resume data structure for reference
     const hasProfileData = mergedSkills.length > 0 || mergedAspirations || 
                            mergedProjects.length > 0 || mergedExperiences.length > 0 || 
                            mergedAchievements.length > 0 || mergedRelevantCoursework.length > 0 ||
-                           parsed_resume || resumeUrl || parsedResumeData.github_url;
+                           parsed_resume || resumeUrl || parsedResumeData.github_url ||
+                           mergedMentorshipInterest || mergedMentorPreference || mergedLocation;
 
     if (hasProfileData) {
       // Create parsed_resume object with only metadata (no duplicate data)
@@ -513,6 +536,9 @@ const signup = async (studentData, file) => {
         relevant_coursework: mergedRelevantCoursework,
         resume_url: resumeUrl || null,
         github_url: parsedResumeData.github_url || null,
+        location: mergedLocation, // Store location in DynamoDB
+        mentorship_interest: mergedMentorshipInterest,
+        mentor_preference: mergedMentorPreference,
       };
 
       // Save profile to DynamoDB
@@ -566,6 +592,31 @@ const signup = async (studentData, file) => {
       }
     } else {
       console.log('ℹ️ No relevant coursework was extracted or merged');
+    }
+    
+    // Fallback: Ensure mentorship_interest and mentor_preference are in response
+    // Always include them if they were provided in the request (even if false or empty string)
+    if (mentorship_interest !== undefined) {
+      if (mergedStudent.mentorship_interest === undefined || mergedStudent.mentorship_interest === null) {
+        mergedStudent.mentorship_interest = mergedMentorshipInterest;
+        console.log('⚠️ Mentorship interest not found in DynamoDB, using provided value (fallback):', mergedMentorshipInterest);
+      }
+    }
+    if (mentor_preference !== undefined) {
+      if (mergedStudent.mentor_preference === undefined || mergedStudent.mentor_preference === null) {
+        mergedStudent.mentor_preference = mergedMentorPreference;
+        console.log('⚠️ Mentor preference not found in DynamoDB, using provided value (fallback):', mergedMentorPreference);
+      }
+    }
+    
+    // Fallback: Ensure contact and location are in response
+    if (mergedContact && (!mergedStudent.contact || mergedStudent.contact === null || mergedStudent.contact === '')) {
+      mergedStudent.contact = mergedContact;
+      console.log('⚠️ Contact not found in RDS, using extracted value (fallback):', mergedContact);
+    }
+    if (mergedLocation && (!mergedStudent.location || mergedStudent.location === null || mergedStudent.location === '')) {
+      mergedStudent.location = mergedLocation;
+      console.log('⚠️ Location not found in DynamoDB, using extracted value (fallback):', mergedLocation);
     }
 
     // Generate JWT token
@@ -670,6 +721,8 @@ const getAllStudents = async () => {
             relevant_coursework: profile?.relevant_coursework || [],
             resume_url: profile?.resume_url || null,
             location: profile?.location || null,
+            mentorship_interest: profile?.mentorship_interest || false,
+            mentor_preference: profile?.mentor_preference || null,
           };
         } catch (error) {
           // If profile fetch fails, return student with empty profile fields
@@ -685,6 +738,8 @@ const getAllStudents = async () => {
             relevant_coursework: [],
             resume_url: null,
             location: null,
+            mentorship_interest: false,
+            mentor_preference: null,
           };
         }
       })
@@ -753,6 +808,8 @@ const getStudentWithProfile = async (studentId) => {
         relevant_coursework: profile.relevant_coursework || [],
         resume_url: profile.resume_url || null,
         location: profile.location || null,
+        mentorship_interest: profile.mentorship_interest || false,
+        mentor_preference: profile.mentor_preference || null,
       };
     } else {
       // No profile data, return only RDS data with empty profile fields
@@ -767,6 +824,8 @@ const getStudentWithProfile = async (studentId) => {
         relevant_coursework: [],
         resume_url: null,
         location: null,
+        mentorship_interest: false,
+        mentor_preference: null,
       };
     }
   } catch (error) {

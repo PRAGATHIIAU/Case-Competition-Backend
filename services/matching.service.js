@@ -138,15 +138,45 @@ const getAllMentees = async () => {
 
 /**
  * Perform mentor-mentee matching using Python script
+ * @param {number|null} mentorId - Optional mentor ID to filter matching to a specific mentor
  * @returns {Promise<Object>} Matching results
  */
-const performMatching = async () => {
+const performMatching = async (mentorId = null) => {
   try {
     // Fetch all mentors and mentees
-    const [mentors, mentees] = await Promise.all([
-      getAllMentors(),
-      getAllMentees()
-    ]);
+    let mentors = await getAllMentors();
+    
+    // If mentorId is provided, filter to only that mentor
+    if (mentorId !== null && mentorId !== undefined) {
+      const mentorIdNum = typeof mentorId === 'string' ? parseInt(mentorId, 10) : Number(mentorId);
+      if (isNaN(mentorIdNum)) {
+        throw new Error('Invalid mentor ID. Must be a valid number.');
+      }
+      
+      // Filter mentors to only include the specified mentor
+      mentors = mentors.filter(mentor => mentor.id === mentorIdNum);
+      
+      if (mentors.length === 0) {
+        // Check if mentor exists but is not willing to be a mentor
+        const userRepository = require('../repositories/user.repository');
+        const user = await userRepository.getUserById(mentorIdNum);
+        
+        if (!user) {
+          throw new Error(`Mentor with ID ${mentorIdNum} not found.`);
+        }
+        
+        if (!user.willing_to_be_mentor) {
+          throw new Error(`User with ID ${mentorIdNum} is not willing to be a mentor.`);
+        }
+        
+        // If user exists and is willing, but not in mentors list, there might be an issue
+        throw new Error(`Mentor with ID ${mentorIdNum} could not be retrieved for matching.`);
+      }
+      
+      console.log(`[performMatching] Filtered to mentor ID: ${mentorIdNum}`);
+    }
+    
+    const mentees = await getAllMentees();
     
     // Prepare input data for Python script
     const inputData = {

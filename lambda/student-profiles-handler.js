@@ -97,6 +97,9 @@ exports.handler = async (event) => {
           achievements: body.profileData.achievements || [],
           relevant_coursework: body.profileData.relevant_coursework || [],
           resume_url: body.profileData.resume_url || null,
+          location: body.profileData.location || null,
+          mentorship_interest: body.profileData.mentorship_interest !== undefined ? body.profileData.mentorship_interest : false,
+          mentor_preference: body.profileData.mentor_preference || null,
           updatedAt: now,
         };
         
@@ -155,7 +158,7 @@ exports.handler = async (event) => {
         const expressionAttributeNames = {};
         const expressionAttributeValues = {};
         
-        const updateFields = ['skills', 'aspirations', 'parsed_resume', 'projects', 'experiences', 'achievements', 'relevant_coursework', 'resume_url'];
+        const updateFields = ['skills', 'aspirations', 'parsed_resume', 'projects', 'experiences', 'achievements', 'relevant_coursework', 'resume_url', 'location', 'mentorship_interest', 'mentor_preference'];
         updateFields.forEach((field, index) => {
           if (body.profileData && body.profileData[field] !== undefined) {
             const nameKey = `#attr${index}`;
