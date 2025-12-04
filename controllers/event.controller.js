@@ -538,6 +538,150 @@ const getLeaderboard = async (req, res) => {
   }
 };
 
+/**
+ * GET /events/student/:studentId/registered
+ * Get all events where a student is registered as a team member
+ */
+const getRegisteredEventsForStudent = async (req, res) => {
+  console.log(`-> triggered endpoint GET /api/events/student/:studentId/registered`);
+  try {
+    const { studentId } = req.params;
+
+    if (!studentId || typeof studentId !== 'string' || !studentId.trim()) {
+      console.log('-> finished endpoint execution GET /api/events/student/:studentId/registered');
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid student ID',
+        error: 'Student ID is required and must be a valid string',
+      });
+    }
+
+    const registeredEvents = await eventService.getRegisteredEventsForStudent(studentId.trim());
+
+    res.status(200).json({
+      success: true,
+      message: 'Registered events retrieved successfully',
+      data: registeredEvents,
+      count: registeredEvents.length,
+    });
+    console.log('-> finished endpoint execution GET /api/events/student/:studentId/registered');
+  } catch (error) {
+    console.log('-> finished endpoint execution GET /api/events/student/:studentId/registered');
+    console.error('Get registered events for student error:', error);
+
+    if (error.message === 'Student not found') {
+      return res.status(404).json({
+        success: false,
+        message: 'Student not found',
+        error: error.message,
+      });
+    }
+
+    if (error.message.includes('required') || error.message.includes('Invalid')) {
+      return res.status(400).json({
+        success: false,
+        message: 'Validation error',
+        error: error.message,
+      });
+    }
+
+    res.status(500).json({
+      success: false,
+      message: 'Failed to retrieve registered events',
+      error: error.message || 'An error occurred while retrieving registered events',
+    });
+  }
+};
+
+/**
+ * POST /events/:eventId/teams/:teamId/submit
+ * Submit competition document for a team
+ */
+const submitCompetitionDocument = async (req, res) => {
+  console.log(`-> triggered endpoint POST /api/events/:eventId/teams/:teamId/submit`);
+  try {
+    const { eventId, teamId } = req.params;
+
+    if (!eventId || typeof eventId !== 'string' || !eventId.trim()) {
+      console.log('-> finished endpoint execution POST /api/events/:eventId/teams/:teamId/submit');
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid event ID',
+        error: 'Event ID is required and must be a valid string',
+      });
+    }
+
+    if (!teamId || typeof teamId !== 'string' || !teamId.trim()) {
+      console.log('-> finished endpoint execution POST /api/events/:eventId/teams/:teamId/submit');
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid team ID',
+        error: 'Team ID is required and must be a valid string',
+      });
+    }
+
+    // Get uploaded file from multer
+    const file = req.file;
+    if (!file) {
+      console.log('-> finished endpoint execution POST /api/events/:eventId/teams/:teamId/submit');
+      return res.status(400).json({
+        success: false,
+        message: 'File is required',
+        error: 'Please upload a document file (PDF, DOC, or DOCX)',
+      });
+    }
+
+    // Submit the document
+    const result = await eventService.submitCompetitionDocument(
+      eventId.trim(),
+      teamId.trim(),
+      file.buffer,
+      file.originalname,
+      file.mimetype
+    );
+
+    res.status(200).json({
+      success: true,
+      message: 'Competition document submitted successfully',
+      data: result,
+    });
+    console.log('-> finished endpoint execution POST /api/events/:eventId/teams/:teamId/submit');
+  } catch (error) {
+    console.log('-> finished endpoint execution POST /api/events/:eventId/teams/:teamId/submit');
+    console.error('Submit competition document error:', error);
+
+    if (error.message === 'Event not found') {
+      return res.status(404).json({
+        success: false,
+        message: 'Event not found',
+        error: error.message,
+      });
+    }
+
+    if (error.message === 'Team not found in event') {
+      return res.status(404).json({
+        success: false,
+        message: 'Team not found in event',
+        error: error.message,
+      });
+    }
+
+    if (error.message.includes('required') || error.message.includes('Invalid')) {
+      return res.status(400).json({
+        success: false,
+        message: 'Validation error',
+        error: error.message,
+      });
+    }
+
+    res.status(500).json({
+      success: false,
+      message: 'Failed to submit competition document',
+      error: error.message || 'An error occurred while submitting the document',
+    });
+  }
+};
+
 module.exports = {
   getAllEvents,
   getCompetitions,
@@ -553,5 +697,7 @@ module.exports = {
   updateTeamDetails,
   submitScores,
   getLeaderboard,
+  getRegisteredEventsForStudent,
+  submitCompetitionDocument,
 };
 
