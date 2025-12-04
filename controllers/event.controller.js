@@ -33,6 +33,33 @@ const getAllEvents = async (req, res) => {
 };
 
 /**
+ * GET /events/competitions
+ * Get all events with type="competition"
+ */
+const getCompetitions = async (req, res) => {
+  console.log('-> triggered endpoint GET /api/events/competitions');
+  try {
+    const competitions = await eventService.getCompetitions();
+
+    res.status(200).json({
+      success: true,
+      message: 'Competitions retrieved successfully',
+      data: competitions,
+      count: competitions.length,
+    });
+    console.log('-> finished endpoint execution GET /api/events/competitions');
+  } catch (error) {
+    console.log('-> finished endpoint execution GET /api/events/competitions');
+    console.error('Get competitions error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to retrieve competitions',
+      error: error.message || 'An error occurred while retrieving competitions',
+    });
+  }
+};
+
+/**
  * GET /events/:id
  * Get event by ID
  */
@@ -176,10 +203,11 @@ const deleteEvent = async (req, res) => {
 const registerAlumniAsJudge = async (req, res) => {
   console.log(`-> triggered endpoint POST /api/events/:id/register`);
   try {
-    const { id } = req.params;
-    const { alumniEmail, alumniName, preferredDateTime, preferredLocation } = req.body;
+    const { id: eventId } = req.params;
+    const { id, alumniEmail, alumniName, preferredDateTime, preferredLocation } = req.body;
 
-    const result = await eventService.registerAlumniAsJudge(id, {
+    const result = await eventService.registerAlumniAsJudge(eventId, {
+      id,
       alumniEmail,
       alumniName,
       preferredDateTime,
@@ -287,6 +315,49 @@ const getRubrics = async (req, res) => {
       success: false,
       message: 'Failed to retrieve rubrics',
       error: error.message || 'An error occurred while retrieving rubrics',
+    });
+  }
+};
+
+/**
+ * PUT /events/:eventId/teams
+ * Update team details for an existing event
+ * teamId is generated automatically and stored
+ */
+const updateTeamDetails = async (req, res) => {
+  console.log(`-> triggered endpoint PUT /api/events/:eventId/teams`);
+  try {
+    const { eventId } = req.params;
+    const { teamName, members, slotPreference } = req.body;
+
+    const updatedEvent = await eventService.updateTeamDetails(eventId, {
+      teamName,
+      members,
+      slotPreference,
+    });
+
+    res.status(200).json({
+      success: true,
+      message: 'Team details updated successfully',
+      data: updatedEvent,
+    });
+    console.log('-> finished endpoint execution PUT /api/events/:eventId/teams');
+  } catch (error) {
+    if (error.message === 'Event not found') {
+      console.log('-> finished endpoint execution PUT /api/events/:eventId/teams');
+      return res.status(404).json({
+        success: false,
+        message: 'Event not found',
+        error: error.message,
+      });
+    }
+
+    console.log('-> finished endpoint execution PUT /api/events/:eventId/teams');
+    console.error('Update team details error:', error);
+    res.status(400).json({
+      success: false,
+      message: 'Failed to update team details',
+      error: error.message || 'An error occurred while updating team details',
     });
   }
 };
@@ -469,6 +540,7 @@ const getLeaderboard = async (req, res) => {
 
 module.exports = {
   getAllEvents,
+  getCompetitions,
   getEventById,
   createEvent,
   updateEvent,
@@ -478,6 +550,7 @@ module.exports = {
   getRubricsForJudge,
   getTeams,
   getRubrics,
+  updateTeamDetails,
   submitScores,
   getLeaderboard,
 };

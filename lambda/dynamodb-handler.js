@@ -135,6 +135,7 @@ exports.handler = async (event) => {
             resume_url: body.profileData.resume_url || null,
             linkedin_url: body.profileData.linkedin_url || null,
             github_url: body.profileData.github_url || null,
+            location: body.profileData.location || null,
             updatedAt: now,
           };
           
@@ -195,7 +196,7 @@ exports.handler = async (event) => {
           const alumniExpressionAttributeNames = {};
           const alumniExpressionAttributeValues = {};
           
-          const alumniUpdateFields = ['skills', 'aspirations', 'bio', 'major', 'grad_year', 'relevant_coursework', 'parsed_resume', 'projects', 'experiences', 'achievements', 'resume_url', 'linkedin_url', 'github_url'];
+          const alumniUpdateFields = ['skills', 'aspirations', 'bio', 'major', 'grad_year', 'relevant_coursework', 'parsed_resume', 'projects', 'experiences', 'achievements', 'resume_url', 'linkedin_url', 'github_url', 'location'];
           alumniUpdateFields.forEach((field, index) => {
             if (body.profileData && body.profileData[field] !== undefined) {
               const nameKey = `#attr${index}`;
@@ -333,6 +334,31 @@ exports.handler = async (event) => {
           }),
         };
         
+      case 'getCompetitions':
+        // Get all events with type="competition"
+        const competitionsScanResult = await dynamodb.send(new ScanCommand({
+          TableName: tableName,
+        }));
+        
+        // Filter events where type="competition"
+        // Check both event.type and event.eventInfo.type
+        const competitions = (competitionsScanResult.Items || []).filter((event) => {
+          return event.type === 'competition' || 
+                 (event.eventInfo && event.eventInfo.type === 'competition');
+        });
+        
+        return {
+          statusCode: 200,
+          headers: {
+            'Content-Type': 'application/json',
+            'Access-Control-Allow-Origin': '*',
+          },
+          body: JSON.stringify({
+            success: true,
+            data: competitions,
+          }),
+        };
+        
       case 'create':
       case 'POST':
         // Create new event
@@ -368,6 +394,7 @@ exports.handler = async (event) => {
           teams: body.teams || [],
           rubrics: body.rubrics || [],
           judges: body.judges || [],
+          slots: body.slots || [],
           scores: body.scores || [],
           createdAt: now,
           updatedAt: now,
@@ -422,7 +449,7 @@ exports.handler = async (event) => {
         const expressionAttributeNames = {};
         const expressionAttributeValues = {};
         
-        const updateFields = ['title', 'description', 'photos', 'rubric', 'slots', 'teams'];
+        const updateFields = ['title', 'description', 'photos', 'rubric', 'slots', 'teams', 'judges', 'rubrics', 'eventInfo'];
         updateFields.forEach((field, index) => {
           if (body[field] !== undefined) {
             const nameKey = `#attr${index}`;

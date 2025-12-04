@@ -3,6 +3,7 @@ const jwt = require('jsonwebtoken');
 const axios = require('axios');
 const { API_GATEWAY_UPLOAD_URL, API_GATEWAY_STUDENT_PROFILES_URL } = require('../config/aws');
 const studentRepository = require('../repositories/student.repository');
+const { parseResume } = require('./resume-parser.service');
 
 const SALT_ROUNDS = 10;
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
@@ -303,7 +304,23 @@ const signup = async (studentData, file) => {
     // Hash password
     const hashedPassword = await bcrypt.hash(studentData.password, SALT_ROUNDS);
 
-    // Upload resume to S3 if provided
+    // Parse resume if provided and extract structured data
+    let parsedResumeData = {
+      skills: [],
+      projects: [],
+      experiences: [],
+      achievements: [],
+      aspirations: null,
+      bio: null,
+      major: null,
+      grad_year: null,
+      relevant_coursework: [],
+      linkedin_url: null,
+      github_url: null,
+      contact: null,
+      location: null,
+    };
+    
     let resumeUrl = null;
     if (file) {
       console.log('Resume file received:', {
@@ -313,32 +330,57 @@ const signup = async (studentData, file) => {
         hasBuffer: !!file.buffer,
       });
       
-      // Check if API Gateway URL is configured
-      if (!API_GATEWAY_UPLOAD_URL) {
-        console.error('❌ API_GATEWAY_UPLOAD_URL is not configured in .env file');
-        console.error('   Please set API_GATEWAY_UPLOAD_URL in your .env file');
-        console.error('   Example: API_GATEWAY_UPLOAD_URL=https://xxxxx.execute-api.region.amazonaws.com/prod/upload');
-      } else {
-        console.log('✅ API_GATEWAY_UPLOAD_URL is configured:', API_GATEWAY_UPLOAD_URL);
+      // Parse resume to extract structured data
+      try {
+        console.log('📄 Parsing resume to extract skills, projects, experiences, achievements, major, grad_year, relevant_coursework...');
+        parsedResumeData = await parseResume(file.buffer, file.mimetype);
+        console.log('✅ Resume parsed successfully:', {
+          skillsCount: parsedResumeData.skills?.length || 0,
+          projectsCount: parsedResumeData.projects?.length || 0,
+          experiencesCount: parsedResumeData.experiences?.length || 0,
+          achievementsCount: parsedResumeData.achievements?.length || 0,
+          hasAspirations: !!parsedResumeData.aspirations,
+          hasMajor: !!parsedResumeData.major,
+          major: parsedResumeData.major || 'Not found',
+          hasGradYear: !!parsedResumeData.grad_year,
+          gradYear: parsedResumeData.grad_year || 'Not found',
+          relevantCourseworkCount: parsedResumeData.relevant_coursework?.length || 0,
+          linkedinUrl: parsedResumeData.linkedin_url || 'Not found',
+          githubUrl: parsedResumeData.github_url || 'Not found',
+          contact: parsedResumeData.contact || 'Not found',
+          location: parsedResumeData.location || 'Not found',
+        });
+      } catch (parseError) {
+        console.error('⚠️ Failed to parse resume, continuing with signup:', {
+          error: parseError.message,
+        });
+        // Continue signup even if parsing fails - user may have provided data manually
       }
       
-      try {
-        console.log('Attempting to upload resume to S3 via API Gateway...');
-        resumeUrl = await uploadResumeToS3(file.buffer, file.originalname, file.mimetype);
+      // Upload resume to S3 if provided
+      // Check if API Gateway URL is configured
+      if (!API_GATEWAY_UPLOAD_URL) {
+        console.warn('⚠️ API_GATEWAY_UPLOAD_URL is not configured - resume will not be uploaded to S3');
+        console.warn('   Resume parsing was successful, but file will not be stored in S3');
+      } else {
+        console.log('✅ API_GATEWAY_UPLOAD_URL is configured:', API_GATEWAY_UPLOAD_URL);
         
-        if (resumeUrl) {
-          console.log('✅ Resume uploaded successfully to S3:', resumeUrl);
-        } else {
-          console.error('❌ Upload function returned null/undefined URL');
+        try {
+          console.log('📤 Uploading resume to S3 via API Gateway...');
+          resumeUrl = await uploadResumeToS3(file.buffer, file.originalname, file.mimetype);
+          
+          if (resumeUrl) {
+            console.log('✅ Resume uploaded successfully to S3:', resumeUrl);
+          } else {
+            console.error('❌ Upload function returned null/undefined URL');
+          }
+        } catch (uploadError) {
+          console.error('⚠️ Failed to upload resume to S3 (signup will continue):', {
+            error: uploadError.message,
+          });
+          // Don't fail signup if resume upload fails
+          // resumeUrl will remain null, but parsed data is already extracted
         }
-      } catch (uploadError) {
-        console.error('❌ Failed to upload resume to S3:', {
-          error: uploadError.message,
-          stack: uploadError.stack,
-          name: uploadError.name,
-        });
-        // Don't fail signup if resume upload fails, but log the error
-        // resumeUrl will remain null
       }
     } else {
       console.log('No resume file provided in signup request');
@@ -360,40 +402,157 @@ const signup = async (studentData, file) => {
       projects,
       experiences,
       achievements,
+      relevant_coursework,
+      mentorship_interest,
+      mentor_preference,
     } = studentData;
 
-    // Prepare RDS data (atomic fields)
+    // Merge LinkedIn URL - manual input takes precedence over parsed
+    const mergedLinkedInUrl = linkedin_url?.trim() || parsedResumeData.linkedin_url || null;
+    
+    // Merge contact - manual input takes precedence over parsed
+    const mergedContact = (contact !== undefined && contact !== null && contact?.trim())
+      ? contact.trim()
+      : (parsedResumeData.contact || null);
+    
+    // Merge location - only from parsed resume (stored in DynamoDB)
+    // Note: Location can be added to request body in the future if needed
+    const mergedLocation = parsedResumeData.location || null;
+
+    // Merge manually provided data with parsed resume data
+    // Manually provided data takes precedence over parsed data
+    const mergedSkills = skills !== undefined 
+      ? (Array.isArray(skills) ? skills : (typeof skills === 'string' ? JSON.parse(skills) : []))
+      : (parsedResumeData.skills || []);
+    
+    const mergedAspirations = aspirations !== undefined && aspirations?.trim()
+      ? aspirations.trim()
+      : (parsedResumeData.aspirations || null);
+    
+    const mergedMajor = major !== undefined && major !== null && major?.trim()
+      ? major.trim()
+      : (parsedResumeData.major || null);
+    
+    // Handle grad_year: use parsed value if not manually provided (null or undefined)
+    const mergedGradYear = (grad_year !== undefined && grad_year !== null)
+      ? (typeof grad_year === 'number' ? grad_year : parseInt(grad_year))
+      : (parsedResumeData.grad_year || null);
+    
+    const mergedProjects = projects !== undefined
+      ? (Array.isArray(projects) ? projects : (typeof projects === 'string' ? JSON.parse(projects) : []))
+      : (parsedResumeData.projects || []);
+    
+    const mergedExperiences = experiences !== undefined
+      ? (Array.isArray(experiences) ? experiences : (typeof experiences === 'string' ? JSON.parse(experiences) : []))
+      : (parsedResumeData.experiences || []);
+    
+    const mergedAchievements = achievements !== undefined
+      ? (Array.isArray(achievements) ? achievements : (typeof achievements === 'string' ? JSON.parse(achievements) : []))
+      : (parsedResumeData.achievements || []);
+    
+    const mergedRelevantCoursework = relevant_coursework !== undefined
+      ? (Array.isArray(relevant_coursework) ? relevant_coursework : (typeof relevant_coursework === 'string' ? JSON.parse(relevant_coursework) : []))
+      : (parsedResumeData.relevant_coursework || []);
+
+    // Prepare RDS data (atomic fields) - auto-populate from parsed resume if not provided
     const rdsData = {
       name,
       email,
       password: hashedPassword,
-      contact,
-      linkedin_url,
-      major,
-      grad_year,
+      contact: mergedContact, // Use merged contact (from manual input or parsed resume)
+      linkedin_url: mergedLinkedInUrl,
+      major: mergedMajor,
+      grad_year: mergedGradYear,
     };
+
+    // Log major and grad_year being stored in RDS
+    console.log('📝 Storing student data in RDS:', {
+      hasMajor: !!mergedMajor,
+      major: mergedMajor || 'Not provided',
+      hasGradYear: !!mergedGradYear,
+      gradYear: mergedGradYear || 'Not provided',
+      source: {
+        majorFromResume: !!parsedResumeData.major,
+        majorFromManual: major !== undefined && major?.trim(),
+        gradYearFromResume: !!parsedResumeData.grad_year,
+        gradYearFromManual: grad_year !== undefined,
+      },
+    });
 
     // Create student in RDS PostgreSQL
     const newStudent = await studentRepository.createStudent(rdsData);
+    
+    // Log what was returned from database
+    console.log('📊 Student created in RDS, returned data:', {
+      student_id: newStudent.student_id,
+      major: newStudent.major,
+      grad_year: newStudent.grad_year,
+      grad_year_type: typeof newStudent.grad_year,
+    });
+
+    // Handle mentorship_interest and mentor_preference
+    const mergedMentorshipInterest = mentorship_interest !== undefined 
+      ? (mentorship_interest === true || mentorship_interest === 'true')
+      : false;
+    
+    const mergedMentorPreference = mentor_preference?.trim() || null;
 
     // Prepare DynamoDB profile data (if any profile fields provided)
-    const hasProfileData = skills || aspirations || parsed_resume || 
-                           projects || experiences || achievements || resumeUrl;
+    // Include parsed resume data structure for reference
+    const hasProfileData = mergedSkills.length > 0 || mergedAspirations || 
+                           mergedProjects.length > 0 || mergedExperiences.length > 0 || 
+                           mergedAchievements.length > 0 || mergedRelevantCoursework.length > 0 ||
+                           parsed_resume || resumeUrl || parsedResumeData.github_url ||
+                           mergedMentorshipInterest || mergedMentorPreference || mergedLocation;
 
     if (hasProfileData) {
+      // Create parsed_resume object with only metadata (no duplicate data)
+      let parsedResumeObject = null;
+      
+      if (parsed_resume !== undefined) {
+        // User provided parsed_resume manually - use as is but remove duplicates
+        const providedParsedResume = typeof parsed_resume === 'string' ? JSON.parse(parsed_resume) : parsed_resume;
+        // Keep only metadata fields, remove duplicates of top-level fields
+        const { skills, projects, experiences, achievements, aspirations, bio, major, grad_year, relevant_coursework, linkedin_url, github_url, ...metadata } = providedParsedResume;
+        parsedResumeObject = Object.keys(metadata).length > 0 ? metadata : null;
+      } else if (file) {
+        // Resume was parsed - store only metadata/reference
+        parsedResumeObject = {
+          parsed_at: new Date().toISOString(),
+          source: 'resume_upload',
+          file_name: file.originalname || null,
+          file_type: file.mimetype || null,
+          // Note: Extracted data (skills, projects, etc.) is stored at top level, not here
+        };
+      }
+
       const profileData = {
-        skills: Array.isArray(skills) ? skills : (skills ? JSON.parse(skills) : []),
-        aspirations: aspirations?.trim() || null,
-        parsed_resume: parsed_resume ? (typeof parsed_resume === 'string' ? JSON.parse(parsed_resume) : parsed_resume) : null,
-        projects: Array.isArray(projects) ? projects : (projects ? JSON.parse(projects) : []),
-        experiences: Array.isArray(experiences) ? experiences : (experiences ? JSON.parse(experiences) : []),
-        achievements: Array.isArray(achievements) ? achievements : (achievements ? JSON.parse(achievements) : []),
+        skills: mergedSkills,
+        aspirations: mergedAspirations,
+        parsed_resume: parsedResumeObject,
+        projects: mergedProjects,
+        experiences: mergedExperiences,
+        achievements: mergedAchievements,
+        relevant_coursework: mergedRelevantCoursework,
         resume_url: resumeUrl || null,
+        github_url: parsedResumeData.github_url || null,
+        location: mergedLocation, // Store location in DynamoDB
+        mentorship_interest: mergedMentorshipInterest,
+        mentor_preference: mergedMentorPreference,
+        mentor_paired: false, // Default to false for new signups
       };
 
       // Save profile to DynamoDB
       try {
+        console.log('💾 Saving profile to DynamoDB:', {
+          studentId: newStudent.student_id,
+          hasRelevantCoursework: mergedRelevantCoursework.length > 0,
+          relevantCourseworkCount: mergedRelevantCoursework.length,
+          relevantCoursework: mergedRelevantCoursework.slice(0, 5),
+          profileDataKeys: Object.keys(profileData),
+        });
         await saveStudentProfile(newStudent.student_id, profileData);
+        console.log('✅ Profile saved successfully for student:', newStudent.student_id);
       } catch (profileError) {
         // Log error but don't fail signup if profile save fails
         console.error('Failed to save profile during signup:', profileError);
@@ -402,7 +561,80 @@ const signup = async (studentData, file) => {
     }
 
     // Get merged data (RDS + DynamoDB)
+    // Use the newly created student object directly to avoid potential timing issues
     const mergedStudent = await getStudentWithProfile(newStudent.student_id);
+    
+    // Log merged student data to verify fields
+    console.log('📋 Merged student data before returning:', {
+      student_id: mergedStudent?.student_id,
+      major: mergedStudent?.major,
+      grad_year: mergedStudent?.grad_year,
+      grad_year_type: typeof mergedStudent?.grad_year,
+      hasRelevantCoursework: !!mergedStudent?.relevant_coursework,
+      relevantCourseworkCount: mergedStudent?.relevant_coursework?.length || 0,
+      relevantCoursework: mergedStudent?.relevant_coursework?.slice(0, 3) || [],
+      extractedRelevantCourseworkCount: mergedRelevantCoursework?.length || 0,
+      extractedRelevantCoursework: mergedRelevantCoursework?.slice(0, 3) || [],
+    });
+    
+    // Fallback: If relevant_coursework was extracted but not in response (due to DynamoDB save/retrieval issues), add it
+    if (mergedRelevantCoursework && mergedRelevantCoursework.length > 0) {
+      if (!mergedStudent.relevant_coursework || mergedStudent.relevant_coursework.length === 0) {
+        mergedStudent.relevant_coursework = mergedRelevantCoursework;
+        console.log('⚠️ Relevant coursework not found in DynamoDB response, using extracted value (fallback):', {
+          count: mergedRelevantCoursework.length,
+          items: mergedRelevantCoursework.slice(0, 3),
+        });
+      } else {
+        console.log('✅ Relevant coursework found in DynamoDB response:', {
+          count: mergedStudent.relevant_coursework.length,
+          items: mergedStudent.relevant_coursework.slice(0, 3),
+        });
+      }
+    } else {
+      console.log('ℹ️ No relevant coursework was extracted or merged');
+    }
+    
+    // Fallback: Ensure mentorship_interest and mentor_preference are in response
+    // Always include them if they were provided in the request (even if false or empty string)
+    if (mentorship_interest !== undefined) {
+      if (mergedStudent.mentorship_interest === undefined || mergedStudent.mentorship_interest === null) {
+        mergedStudent.mentorship_interest = mergedMentorshipInterest;
+        console.log('⚠️ Mentorship interest not found in DynamoDB, using provided value (fallback):', mergedMentorshipInterest);
+      }
+    }
+    if (mentor_preference !== undefined) {
+      if (mergedStudent.mentor_preference === undefined || mergedStudent.mentor_preference === null) {
+        mergedStudent.mentor_preference = mergedMentorPreference;
+        console.log('⚠️ Mentor preference not found in DynamoDB, using provided value (fallback):', mergedMentorPreference);
+      }
+    }
+    
+    // Fallback: Ensure contact and location are in response
+    if (mergedContact && (!mergedStudent.contact || mergedStudent.contact === null || mergedStudent.contact === '')) {
+      mergedStudent.contact = mergedContact;
+      console.log('⚠️ Contact not found in RDS, using extracted value (fallback):', mergedContact);
+    }
+    if (mergedLocation && (!mergedStudent.location || mergedStudent.location === null || mergedStudent.location === '')) {
+      mergedStudent.location = mergedLocation;
+      console.log('⚠️ Location not found in DynamoDB, using extracted value (fallback):', mergedLocation);
+    }
+    
+    // Fallback: Ensure mentor_paired is in response (default to false)
+    if (mergedStudent.mentor_paired === undefined || mergedStudent.mentor_paired === null) {
+      mergedStudent.mentor_paired = false;
+      console.log('⚠️ Mentor paired not found in DynamoDB, using default value (fallback): false');
+    }
+
+    // Log profile creation for batch matching
+    try {
+      const { logUserProfileChange } = require('../repositories/profileChangeLog.repository');
+      await logUserProfileChange(newStudent.student_id, 'CREATE');
+      console.log('✅ Logged profile creation for batch matching:', newStudent.student_id);
+    } catch (logError) {
+      // Don't fail signup if logging fails
+      console.warn('⚠️ Failed to log profile creation:', logError.message);
+    }
 
     // Generate JWT token
     const token = jwt.sign(
@@ -503,7 +735,12 @@ const getAllStudents = async () => {
             projects: profile?.projects || [],
             experiences: profile?.experiences || [],
             achievements: profile?.achievements || [],
+            relevant_coursework: profile?.relevant_coursework || [],
             resume_url: profile?.resume_url || null,
+            location: profile?.location || null,
+            mentorship_interest: profile?.mentorship_interest || false,
+            mentor_preference: profile?.mentor_preference || null,
+            mentor_paired: profile?.mentor_paired !== undefined ? profile.mentor_paired : false,
           };
         } catch (error) {
           // If profile fetch fails, return student with empty profile fields
@@ -516,7 +753,12 @@ const getAllStudents = async () => {
             projects: [],
             experiences: [],
             achievements: [],
+            relevant_coursework: [],
             resume_url: null,
+            location: null,
+            mentorship_interest: false,
+            mentor_preference: null,
+            mentor_paired: false,
           };
         }
       })
@@ -582,7 +824,12 @@ const getStudentWithProfile = async (studentId) => {
         projects: profile.projects || [],
         experiences: profile.experiences || [],
         achievements: profile.achievements || [],
+        relevant_coursework: profile.relevant_coursework || [],
         resume_url: profile.resume_url || null,
+        location: profile.location || null,
+        mentorship_interest: profile.mentorship_interest || false,
+        mentor_preference: profile.mentor_preference || null,
+        mentor_paired: profile.mentor_paired !== undefined ? profile.mentor_paired : false,
       };
     } else {
       // No profile data, return only RDS data with empty profile fields
@@ -594,7 +841,12 @@ const getStudentWithProfile = async (studentId) => {
         projects: [],
         experiences: [],
         achievements: [],
+        relevant_coursework: [],
         resume_url: null,
+        location: null,
+        mentorship_interest: false,
+        mentor_preference: null,
+        mentor_paired: false,
       };
     }
   } catch (error) {
@@ -728,20 +980,23 @@ const updateStudent = async (studentId, updateData, file) => {
       await studentRepository.updateStudentPassword(studentId, hashedPassword);
     }
 
+    // Check if there are any updates (RDS or DynamoDB)
+    const hasRdsUpdates = Object.keys(updateDataForDb).length > 0;
+    const hasProfileUpdates = skills !== undefined || aspirations !== undefined || 
+                              parsed_resume !== undefined || projects !== undefined ||
+                              experiences !== undefined || achievements !== undefined || file;
+    const hasAnyUpdates = hasRdsUpdates || hasProfileUpdates;
+
     // Update student in RDS (only if there are RDS fields to update)
     let updatedStudent = existingStudent;
-    if (Object.keys(updateDataForDb).length > 0) {
+    if (hasRdsUpdates) {
       updatedStudent = await studentRepository.updateStudent(studentId, updateDataForDb);
       if (!updatedStudent) {
         throw new Error('Student not found');
       }
     }
 
-    // Prepare DynamoDB profile update data
-    const hasProfileUpdates = skills !== undefined || aspirations !== undefined || 
-                              parsed_resume !== undefined || projects !== undefined ||
-                              experiences !== undefined || achievements !== undefined || file;
-
+    // Update DynamoDB profile (only if there are profile fields to update)
     if (hasProfileUpdates) {
       // Get current profile or create new one
       const currentProfile = await getStudentProfile(studentId);
@@ -767,6 +1022,18 @@ const updateStudent = async (studentId, updateData, file) => {
       await saveStudentProfile(studentId, profileData);
     }
 
+    // Log profile update for batch matching (if ANY updates were made)
+    if (hasAnyUpdates) {
+      try {
+        const { logUserProfileChange } = require('../repositories/profileChangeLog.repository');
+        await logUserProfileChange(studentId, 'UPDATE');
+        console.log('✅ Logged profile update for batch matching:', studentId);
+      } catch (logError) {
+        // Don't fail update if logging fails
+        console.warn('⚠️ Failed to log profile update:', logError.message);
+      }
+    }
+
     // Return merged data
     return await getStudentWithProfile(studentId);
   } catch (error) {
@@ -790,6 +1057,17 @@ const saveExtendedProfile = async (studentId, profileData) => {
 
     // Save to DynamoDB
     const savedProfile = await saveStudentProfile(studentId, profileData);
+    
+    // Log profile update for batch matching
+    try {
+      const { logUserProfileChange } = require('../repositories/profileChangeLog.repository');
+      await logUserProfileChange(studentId, 'UPDATE');
+      console.log('✅ Logged profile update for batch matching (saveExtendedProfile):', studentId);
+    } catch (logError) {
+      // Don't fail update if logging fails
+      console.warn('⚠️ Failed to log profile update:', logError.message);
+    }
+    
     return savedProfile;
   } catch (error) {
     throw error;

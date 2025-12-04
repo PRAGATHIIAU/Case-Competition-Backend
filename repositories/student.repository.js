@@ -38,7 +38,7 @@ const createStudent = async (studentData) => {
     contact?.trim() || null,
     linkedin_url?.trim() || null,
     major?.trim() || null,
-    grad_year ? parseInt(grad_year) : null,
+    grad_year !== undefined && grad_year !== null ? (typeof grad_year === 'number' ? grad_year : parseInt(grad_year)) : null,
   ];
 
   try {

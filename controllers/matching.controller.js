@@ -65,6 +65,7 @@ const getAllMentees = async (req, res) => {
  * Perform mentor-mentee matching
  * Query params:
  *   - testing: boolean (default: false) - If true, send emails to ADMIN_EMAIL instead of mentor emails
+ *   - mentor_id: number (optional) - If provided, only perform matching for this specific mentor
  */
 const performMatching = async (req, res) => {
   console.log('-> triggered endpoint POST /api/matching/match');
@@ -72,8 +73,24 @@ const performMatching = async (req, res) => {
     // Get testing parameter from query string
     const testing = req.query.testing === 'true' || req.query.testing === true;
     
+    // Get mentor_id parameter from query string (optional)
+    let mentorId = null;
+    if (req.query.mentor_id !== undefined && req.query.mentor_id !== null && req.query.mentor_id !== '') {
+      const mentorIdNum = parseInt(req.query.mentor_id, 10);
+      if (isNaN(mentorIdNum)) {
+        console.log('-> finished endpoint execution POST /api/matching/match');
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid mentor_id parameter',
+          error: 'mentor_id must be a valid number',
+        });
+      }
+      mentorId = mentorIdNum;
+      console.log(`[performMatching] Matching for specific mentor ID: ${mentorId}`);
+    }
+    
     // Perform matching
-    const result = await matchingService.performMatching();
+    const result = await matchingService.performMatching(mentorId);
     
     if (!result.success) {
       console.log('-> finished endpoint execution POST /api/matching/match');
@@ -108,7 +125,7 @@ const performMatching = async (req, res) => {
           }
         });
         
-        // Send emails to each mentor with their assigned mentees
+        // Send emails to each mentor - ONE STUDENT PER EMAIL
         for (const [mentorIdStr, matchData] of Object.entries(result.matches)) {
           const mentor = mentorMap.get(mentorIdStr);
           if (!mentor) {
@@ -132,6 +149,7 @@ const performMatching = async (req, res) => {
                   aspirations: null,
                   parsed_resume: null,
                   major: null,
+                  relevant_coursework: [],
                 };
               }
               return fullMentee;
@@ -143,35 +161,52 @@ const performMatching = async (req, res) => {
             continue;
           }
           
-          try {
-            // Send email notification
-            const emailResult = await sendMentorNotification({
-              mentor: {
-                name: mentor.name || matchData.mentor_name || 'Mentor',
-                email: mentor.email || matchData.mentor_email,
-              },
-              mentees: fullMentees,
-              testing: testing,
-            });
+          // Send ONE EMAIL PER STUDENT (one at a time)
+          for (let i = 0; i < fullMentees.length; i++) {
+            const student = fullMentees[i];
+            const studentName = student.name || 'Unknown Student';
             
-            emailResults.push({
-              mentorId: mentorIdStr,
-              mentorName: mentor.name,
-              mentorEmail: testing ? 'ADMIN_EMAIL (testing)' : (mentor.email || 'No email'),
-              menteeCount: fullMentees.length,
-              emailSent: true,
-              messageId: emailResult.MessageId,
-            });
-          } catch (emailError) {
-            console.error(`Failed to send email to mentor ${mentorIdStr}:`, emailError);
-            emailResults.push({
-              mentorId: mentorIdStr,
-              mentorName: mentor.name,
-              mentorEmail: mentor.email || 'No email',
-              menteeCount: fullMentees.length,
-              emailSent: false,
-              error: emailError.message,
-            });
+            try {
+              console.log(`[Email] Sending email ${i + 1}/${fullMentees.length} to mentor ${mentorIdStr} for student: ${studentName}`);
+              
+              // Send email notification for this single student
+              const emailResult = await sendMentorNotification({
+                mentor: mentor, // Pass full mentor object (includes profile data)
+                student: student, // Pass single student
+                testing: testing,
+              });
+              
+              emailResults.push({
+                mentorId: mentorIdStr,
+                mentorName: mentor.name,
+                mentorEmail: testing ? 'ADMIN_EMAIL (testing)' : (mentor.email || 'No email'),
+                studentId: student.student_id || student.id,
+                studentName: studentName,
+                emailSent: true,
+                messageId: emailResult.MessageId,
+                commonInterest: emailResult.commonInterest || null,
+                emailNumber: i + 1,
+                totalStudents: fullMentees.length,
+              });
+              
+              console.log(`[Email] Successfully sent email ${i + 1}/${fullMentees.length} to mentor ${mentorIdStr} for student: ${studentName}`);
+            } catch (emailError) {
+              console.error(`Failed to send email ${i + 1}/${fullMentees.length} to mentor ${mentorIdStr} for student ${studentName}:`, emailError);
+              emailResults.push({
+                mentorId: mentorIdStr,
+                mentorName: mentor.name,
+                mentorEmail: mentor.email || 'No email',
+                studentId: student.student_id || student.id,
+                studentName: studentName,
+                emailSent: false,
+                error: emailError.message,
+                emailNumber: i + 1,
+                totalStudents: fullMentees.length,
+              });
+              
+              // Continue to next student even if this one failed
+              // Don't break the loop - we want to try sending emails for all students
+            }
           }
         }
       } catch (emailError) {

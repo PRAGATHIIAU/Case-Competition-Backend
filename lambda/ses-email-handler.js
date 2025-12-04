@@ -56,8 +56,8 @@ exports.handler = async (event) => {
     } = body;
     
     // Validate required fields
-    if (!alumniEmail || !eventId || !eventTitle || !preferredDateTime || !preferredLocation) {
-      throw new Error('Missing required fields: alumniEmail, eventId, eventTitle, preferredDateTime, preferredLocation');
+    if (!alumniEmail || !eventId || !eventTitle) {
+      throw new Error('Missing required fields: alumniEmail, eventId, eventTitle');
     }
     
     // Validate email format
@@ -89,8 +89,8 @@ exports.handler = async (event) => {
           
           <h3>Preferences:</h3>
           <ul>
-            <li><strong>Preferred Date/Time:</strong> ${preferredDateTime}</li>
-            <li><strong>Preferred Location:</strong> ${preferredLocation}</li>
+            <li><strong>Preferred Date/Time:</strong> ${preferredDateTime || 'Not specified'}</li>
+            <li><strong>Preferred Location:</strong> ${preferredLocation || 'Not specified'}</li>
           </ul>
           
           <p>Please review and contact the alumni to confirm their participation.</p>
@@ -112,8 +112,8 @@ Alumni Details:
 - Email: ${alumniEmail}
 
 Preferences:
-- Preferred Date/Time: ${preferredDateTime}
-- Preferred Location: ${preferredLocation}
+- Preferred Date/Time: ${preferredDateTime || 'Not specified'}
+- Preferred Location: ${preferredLocation || 'Not specified'}
 
 Please review and contact the alumni to confirm their participation.
     `;

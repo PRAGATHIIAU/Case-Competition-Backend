@@ -1029,6 +1029,129 @@ const extractGitHubUrl = (text) => {
 };
 
 /**
+ * Extract contact number from resume text
+ * @param {string} text - Resume text
+ * @returns {string|null} Contact number
+ */
+const extractContact = (text) => {
+  if (!text || typeof text !== 'string' || text.length < 10) {
+    return null;
+  }
+
+  // Common phone number patterns
+  const phonePatterns = [
+    // US/International formats: (123) 456-7890, 123-456-7890, 123.456.7890, +1 123-456-7890
+    /(\+?\d{1,3}[\s\-\.]?)?\(?\d{3}\)?[\s\-\.]?\d{3}[\s\-\.]?\d{4}/g,
+    // International: +91 98765 43210, +44 20 1234 5678
+    /\+\d{1,3}[\s\-]?\d{1,4}[\s\-]?\d{1,4}[\s\-]?\d{1,9}/g,
+    // Simple: 1234567890 (10 digits)
+    /\b\d{10}\b/g,
+    // With spaces: 123 456 7890
+    /\b\d{3}[\s\-]?\d{3}[\s\-]?\d{4}\b/g,
+  ];
+
+  // Look for phone numbers in header/contact section (usually at top of resume)
+  const headerSection = text.substring(0, Math.min(1000, text.length));
+  
+  for (const pattern of phonePatterns) {
+    const matches = headerSection.match(pattern);
+    if (matches && matches.length > 0) {
+      // Take the first match and clean it up
+      let contact = matches[0].trim();
+      // Remove common prefixes/suffixes
+      contact = contact.replace(/^(phone|tel|mobile|cell|contact)[\s:]+/i, '');
+      contact = contact.replace(/[^\d\+\-\(\)\.\s]/g, ''); // Keep only digits, +, -, (, ), ., spaces
+      contact = contact.trim();
+      
+      // Validate: should have at least 10 digits
+      const digitCount = (contact.match(/\d/g) || []).length;
+      if (digitCount >= 10 && digitCount <= 15 && contact.length >= 10 && contact.length <= 20) {
+        return contact;
+      }
+    }
+  }
+
+  // Also search entire text if not found in header
+  for (const pattern of phonePatterns) {
+    const matches = text.match(pattern);
+    if (matches && matches.length > 0) {
+      let contact = matches[0].trim();
+      contact = contact.replace(/^(phone|tel|mobile|cell|contact)[\s:]+/i, '');
+      contact = contact.replace(/[^\d\+\-\(\)\.\s]/g, '');
+      contact = contact.trim();
+      
+      const digitCount = (contact.match(/\d/g) || []).length;
+      if (digitCount >= 10 && digitCount <= 15 && contact.length >= 10 && contact.length <= 20) {
+        return contact;
+      }
+    }
+  }
+
+  return null;
+};
+
+/**
+ * Extract location from resume text
+ * @param {string} text - Resume text
+ * @returns {string|null} Location (city, state/country)
+ */
+const extractLocation = (text) => {
+  if (!text || typeof text !== 'string' || text.length < 10) {
+    return null;
+  }
+
+  // Look for location in header section (usually at top, near contact info)
+  const headerSection = text.substring(0, Math.min(1500, text.length));
+  
+  // Common location patterns
+  const locationPatterns = [
+    // "City, State" or "City, Country" format
+    /([A-Z][a-zA-Z\s]+(?:City|Town|Village)?),\s*([A-Z][a-zA-Z\s]+(?:State|Province|Country)?)/,
+    // "City, ST" (2-letter state code)
+    /([A-Z][a-zA-Z\s]+),\s*([A-Z]{2})\b/,
+    // "City - State" or "City | State"
+    /([A-Z][a-zA-Z\s]+)\s*[–—\-\|]\s*([A-Z][a-zA-Z\s]+)/,
+    // Just city name (if it's a well-known city)
+    /\b(New York|Los Angeles|Chicago|Houston|Phoenix|Philadelphia|San Antonio|San Diego|Dallas|San Jose|Austin|Jacksonville|San Francisco|Indianapolis|Columbus|Fort Worth|Charlotte|Seattle|Denver|Washington|Boston|El Paso|Detroit|Nashville|Memphis|Portland|Oklahoma City|Las Vegas|Louisville|Baltimore|Milwaukee|Albuquerque|Tucson|Fresno|Sacramento|Kansas City|Mesa|Atlanta|Omaha|Colorado Springs|Raleigh|Miami|Long Beach|Virginia Beach|Oakland|Minneapolis|Tulsa|Cleveland|Wichita|Arlington|Tampa|New Orleans|Honolulu|Anaheim|Santa Ana|St\. Louis|Riverside|Corpus Christi|Lexington|Henderson|Stockton|Saint Paul|Cincinnati|St\. Petersburg|Irvine|Winston-Salem|Durham|Lincoln|Greensboro|Jersey City|Chula Vista|Norfolk|Orlando|Chandler|Laredo|Madison|Durham|Lubbock|Winston-Salem|Garland|Glendale|Hialeah|Reno|Chesapeake|Gilbert|Baton Rouge|Irving|Scottsdale|North Las Vegas|Fremont|Boise|Richmond|San Bernardino|Birmingham|Spokane|Rochester|Des Moines|Modesto|Fayetteville|Tacoma|Oxnard|Fontana|Columbus|Montgomery|Moreno Valley|Shreveport|Aurora|Yonkers|Akron|Huntington Beach|Little Rock|Augusta|Amarillo|Glendale|Mobile|Grand Rapids|Salt Lake City|Tallahassee|Huntsville|Grand Prairie|Knoxville|Worcester|Newport News|Brownsville|Overland Park|Santa Clarita|Providence|Garden Grove|Chattanooga|Oceanside|Jackson|Fort Lauderdale|Santa Rosa|Rancho Cucamonga|Port St\. Lucie|Tempe|Ontario|Vancouver|Sioux Falls|Peoria|Oxnard|Aurora|Pembroke Pines|Salem|Corona|Eugene|McKinney|Fort Collins|Lancaster|Cary|Palmdale|Hayward|Salinas|Frisco|Springfield|Pasadena|Macon|Alexandria|Pomona|Lakewood|Sunnyvale|Escondido|Kansas City|Hollywood|Clarksville|Torrance|Rockford|Joliet|Paterson|Bridgeport|Naperville|Savannah|Mesquite|Syracuse|Pasadena|Orange|Fullerton|Killeen|Dayton|McAllen|Bellevue|Miramar|Hampton|West Valley City|Warren|Olathe|Columbia|Thornton|Carrollton|Midland|Charleston|Waco|Sterling Heights|Green Bay|Cape Coral|Thousand Oaks|Topeka|El Monte|Concord|Visalia|Simi Valley|St\. George|Vallejo|Victorville|Evansville|Santa Clara|Abilene|Athens|Round Rock|Lakeland|Santa Ana|Norman|Palm Coast|Corona|Murfreesboro|High Point|Westminster|Rochester|Odessa|Manchester|Elgin|West Jordan|Round Rock|Clearwater|Waterbury|Gresham|Fairfield|Billings|Lowell|San Buenaventura|Pueblo|High Point|West Covina|Richmond|Murrieta|Cambridge|Antioch|Berkeley|Richardson|St\. George|Ann Arbor|Daly City|Peoria|Elk Grove|Odessa|Santa Maria|Kenosha|Hammond|Largo|Burbank|Appleton|Fargo|Modesto|Lynchburg|Tyler|Lewisville|Edison|League City|Bellingham|Utica|San Mateo|Rialto|Boca Raton|San Angelo|Las Cruces|Renton|Vista|South Bend|Davie|Greeley|Mission Viejo|Portsmouth|Dearborn|South Gate|Tuscaloosa|Livonia|New Bedford|Vacaville|Brockton|Roswell|Beaverton|Quincy|Sparks|Yakima|Lee's Summit|Federal Way|Carson|Santa Monica|Hesperia|Allen|Rio Rancho|Yuma|Westminster|Orem|Lynn|Redding|Spokane Valley|Miami Beach|Boulder|Somerville|Fayetteville|Lakewood|Kenner|Bayonne|Fall River|Albany|Norwalk|Bellingham|Greenville|Longview|Mission|Bryan|St\. Joseph|Trenton|Broomfield|Sandy|Bismarck|Lawton|Sumter|Boynton Beach|Deltona|Racine|Rapid City|Muskegon|Layton|Lompoc|Missoula|Casper|Flagstaff|Kennewick|Jackson|Pocatello|Idaho Falls|Grand Junction|Bozeman|Cheyenne|Casper|Rapid City|Sioux Falls|Fargo|Bismarck|Billings|Missoula|Bozeman|Grand Junction|Flagstaff|Pocatello|Idaho Falls|Cheyenne|Jackson|Kennewick|Layton|Muskegon|Rapid City|Lompoc|Missoula|Casper|Flagstaff|Kennewick|Jackson|Pocatello|Idaho Falls|Grand Junction|Bozeman|Cheyenne|Casper|Rapid City|Sioux Falls|Fargo|Bismarck|Billings|Missoula|Bozeman|Grand Junction|Flagstaff|Pocatello|Idaho Falls|Cheyenne|Jackson|Kennewick)\b/i,
+  ];
+
+  // Try to find location patterns
+  for (const pattern of locationPatterns) {
+    const match = headerSection.match(pattern);
+    if (match) {
+      let location = match[0].trim();
+      // Clean up common prefixes
+      location = location.replace(/^(location|address|city|based in|located in|resides in)[\s:]+/i, '');
+      location = location.trim();
+      
+      // Validate: should be reasonable length and contain letters
+      if (location.length >= 3 && location.length <= 100 && /[A-Za-z]/.test(location)) {
+        return location;
+      }
+    }
+  }
+
+  // Look for common location keywords followed by city/state
+  const locationKeywords = ['location', 'address', 'city', 'based in', 'located in', 'resides in', 'lives in'];
+  for (const keyword of locationKeywords) {
+    const keywordIndex = headerSection.toLowerCase().indexOf(keyword);
+    if (keywordIndex !== -1) {
+      const context = headerSection.substring(keywordIndex, keywordIndex + 100);
+      const locationMatch = context.match(new RegExp(`${keyword}[\\s:]+([A-Z][a-zA-Z\\s,]+(?:,\\s*[A-Z][a-zA-Z]+)?)`, 'i'));
+      if (locationMatch && locationMatch[1]) {
+        let location = locationMatch[1].trim();
+        location = location.replace(/[^\w\s,]/g, ''); // Remove special chars except commas
+        if (location.length >= 3 && location.length <= 100) {
+          return location;
+        }
+      }
+    }
+  }
+
+  return null;
+};
+
+/**
  * Parse resume file and extract structured data
  * @param {Buffer} fileBuffer - Resume file buffer
  * @param {string} mimeType - MIME type of the file
@@ -1055,6 +1178,23 @@ const parseResume = async (fileBuffer, mimeType) => {
     const major = extractMajor(text);
     const gradYear = extractGradYear(text);
     const relevantCoursework = extractRelevantCoursework(text);
+    
+    // Extract contact and location - try both raw and normalized text
+    console.log('🔍 Extracting contact number and location...');
+    const contact = extractContact(rawText) || extractContact(text);
+    const location = extractLocation(rawText) || extractLocation(text);
+    
+    if (contact) {
+      console.log('✅ Contact number extracted:', contact);
+    } else {
+      console.log('⚠️ Contact number not found in resume');
+    }
+    
+    if (location) {
+      console.log('✅ Location extracted:', location);
+    } else {
+      console.log('⚠️ Location not found in resume');
+    }
     
     // Extract LinkedIn and GitHub URLs - try both raw and normalized text
     // URLs might be broken across lines in raw text, so we search both
@@ -1120,6 +1260,8 @@ const parseResume = async (fileBuffer, mimeType) => {
       relevant_coursework: relevantCoursework.length > 0 ? relevantCoursework : [],
       linkedin_url: linkedinUrl || null,
       github_url: githubUrl || null,
+      contact: contact || null,
+      location: location || null,
     };
     
     // Debug extraction of new fields
@@ -1160,6 +1302,10 @@ const parseResume = async (fileBuffer, mimeType) => {
       hasGitHub: !!result.github_url,
       linkedinUrl: result.linkedin_url,
       githubUrl: result.github_url,
+      hasContact: !!result.contact,
+      contact: result.contact,
+      hasLocation: !!result.location,
+      location: result.location,
     });
     
     return result;

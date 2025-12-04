@@ -29,6 +29,9 @@ const signup = async (req, res) => {
       projects,
       experiences,
       achievements,
+      relevant_coursework,
+      mentorship_interest,
+      mentor_preference,
     } = req.body;
 
     // Get uploaded file from multer
@@ -51,6 +54,9 @@ const signup = async (req, res) => {
       projects: projects ? (Array.isArray(projects) ? projects : JSON.parse(projects)) : undefined,
       experiences: experiences ? (Array.isArray(experiences) ? experiences : JSON.parse(experiences)) : undefined,
       achievements: achievements ? (Array.isArray(achievements) ? achievements : JSON.parse(achievements)) : undefined,
+      relevant_coursework: relevant_coursework ? (Array.isArray(relevant_coursework) ? relevant_coursework : JSON.parse(relevant_coursework)) : undefined,
+      mentorship_interest: mentorship_interest !== undefined ? (mentorship_interest === 'true' || mentorship_interest === true) : undefined,
+      mentor_preference: mentor_preference?.trim() || undefined,
     };
 
     // Call service to signup student (will split and store in RDS + DynamoDB)

@@ -6,6 +6,7 @@ const { authenticateAdmin } = require('../middleware/adminAuth');
 /**
  * Event Routes
  * GET /api/events - Get all events
+ * GET /api/events/competitions - Get all events with type="competition"
  * GET /api/events/:id - Get event by ID
  * GET /api/events/judged-by/:userId - Get all events where user is assigned as judge
  * GET /api/events/judged-by/:userId/rubrics - Get all rubrics for events where user is a judge
@@ -14,6 +15,7 @@ const { authenticateAdmin } = require('../middleware/adminAuth');
  * DELETE /api/events/:id - Delete an event (Admin only)
  * POST /api/events/:id/register - Register alumni as judge
  * GET /api/events/:eventId/teams - Get teams with total scores
+ * PUT /api/events/:eventId/teams - Update team details (teamId is generated automatically)
  * GET /api/events/:eventId/rubrics - Get rubrics
  * POST /api/events/:eventId/score - Submit scores
  * GET /api/events/:eventId/leaderboard - Get leaderboard
@@ -21,6 +23,9 @@ const { authenticateAdmin } = require('../middleware/adminAuth');
 
 // GET /api/events
 router.get('/', eventController.getAllEvents);
+
+// GET /api/events/competitions (must come before /:id route)
+router.get('/competitions', eventController.getCompetitions);
 
 // POST /api/events (Admin only - requires authentication)
 router.post('/', authenticateAdmin, eventController.createEvent);
@@ -34,6 +39,9 @@ router.get('/judged-by/:userId', eventController.getEventsJudgedBy);
 
 // GET /api/events/:eventId/teams
 router.get('/:eventId/teams', eventController.getTeams);
+
+// PUT /api/events/:eventId/teams
+router.put('/:eventId/teams', eventController.updateTeamDetails);
 
 // GET /api/events/:eventId/rubrics
 router.get('/:eventId/rubrics', eventController.getRubrics);

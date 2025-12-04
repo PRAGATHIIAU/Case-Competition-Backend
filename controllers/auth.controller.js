@@ -58,6 +58,7 @@ const signup = async (req, res) => {
       projects,
       experiences,
       achievements,
+      location,
     } = req.body;
 
     // Get uploaded file from multer
@@ -136,6 +137,7 @@ const signup = async (req, res) => {
       projects: projects ? (Array.isArray(projects) ? projects : JSON.parse(projects)) : undefined,
       experiences: experiences ? (Array.isArray(experiences) ? experiences : JSON.parse(experiences)) : undefined,
       achievements: achievements ? (Array.isArray(achievements) ? achievements : JSON.parse(achievements)) : undefined,
+      location: location?.trim() || undefined,
     };
 
     // Debug: Log normalized values

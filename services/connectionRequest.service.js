@@ -125,6 +125,24 @@ const getConnectionRequestsByMentor = async (mentorId) => {
 };
 
 /**
+ * Get all connection requests sent by a student
+ * @param {string} studentId - Student ID
+ * @returns {Promise<Array>} Array of connection requests
+ */
+const getConnectionRequestsByStudent = async (studentId) => {
+  try {
+    if (!studentId || typeof studentId !== 'string' || !studentId.trim()) {
+      throw new Error('Student ID is required and must be a valid string');
+    }
+
+    const requests = await connectionRequestRepository.getConnectionRequestsByStudent(studentId.trim());
+    return requests;
+  } catch (error) {
+    throw error;
+  }
+};
+
+/**
  * Delete a connection request
  * @param {number} requestId - Connection request ID
  * @returns {Promise<boolean>} True if deleted
@@ -151,6 +169,7 @@ module.exports = {
   acceptConnectionRequest,
   declineConnectionRequest,
   getConnectionRequestsByMentor,
+  getConnectionRequestsByStudent,
   deleteConnectionRequest,
 };
 
