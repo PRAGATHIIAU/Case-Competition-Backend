@@ -83,7 +83,7 @@ const runBatchMatching = async () => {
       };
     }
 
-    // Prepare input data for Python script
+    // Prepare input data for Python script with ALL meaningful profile data
     const inputData = {
       mentors: mentors.map(m => ({
         id: m.id,
@@ -94,9 +94,15 @@ const runBatchMatching = async () => {
         experiences: m.experiences || [],
         achievements: m.achievements || [],
         aspirations: m.aspirations || null,
+        parsed_resume: m.parsed_resume || null, // Include parsed resume for rich context
+        bio: m.bio || null, // Include bio if available
         location: m.location || null,
         willing_to_be_mentor: m.willing_to_be_mentor || false,
         mentor_capacity: m.mentor_capacity || 0,
+        // Include additional context fields if available
+        major: m.major || null,
+        grad_year: m.grad_year || null,
+        relevant_coursework: m.relevant_coursework || [],
       })),
       mentees: mentees.map(s => ({
         id: s.student_id || s.id,
@@ -108,12 +114,16 @@ const runBatchMatching = async () => {
         experiences: s.experiences || [],
         achievements: s.achievements || [],
         aspirations: s.aspirations || null,
+        parsed_resume: s.parsed_resume || null, // Include parsed resume for rich context
         major: s.major || null,
+        grad_year: s.grad_year || null, // Include grad_year for context
         relevant_coursework: s.relevant_coursework || [],
         mentor_preference: s.mentor_preference || null,
         location: s.location || null,
         mentorship_interest: s.mentorship_interest || false,
         mentor_paired: s.mentor_paired || false,
+        // Include additional context if available
+        linkedin_url: s.linkedin_url || null,
       })),
     };
 
