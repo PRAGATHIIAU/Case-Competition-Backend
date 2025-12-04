@@ -33,9 +33,23 @@ const getStudentEngagement = async () => {
   }
 };
 
+/**
+ * Get mentor engagement statistics for admin dashboard.
+ *
+ * @returns {Promise<{totalMentors:number,activeMentors:number,inactiveMentors:number,pendingRequests:number,acceptedRequests:number}>}
+ */
+const getMentorEngagement = async () => {
+  try {
+    return await analyticsRepository.fetchMentorEngagement();
+  } catch (error) {
+    throw error;
+  }
+};
+
 module.exports = {
   getBasicStats,
   getStudentEngagement,
+  getMentorEngagement,
   /**
    * Get alumni engagement statistics for admin dashboard.
    *

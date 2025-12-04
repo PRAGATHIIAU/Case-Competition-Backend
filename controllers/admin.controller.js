@@ -1,4 +1,5 @@
 const adminService = require('../services/admin.service');
+const { ADMIN_ROLES } = require('../models/admin.model');
 
 /**
  * Admin Controller
@@ -56,13 +57,70 @@ const login = async (req, res) => {
 };
 
 /**
+ * POST /admin/signup
+ * Create a new admin/faculty account
+ */
+const signup = async (req, res) => {
+  try {
+    const { email, password, firstName, lastName, first_name, last_name, role } = req.body || {};
+
+    const resolvedFirstName = (firstName || first_name || '').trim();
+    const resolvedLastName = (lastName || last_name || '').trim();
+
+    if (!email || !password || !resolvedFirstName || !resolvedLastName) {
+      return res.status(400).json({
+        success: false,
+        message: 'Email, password, firstName, and lastName are required',
+      });
+    }
+
+    const result = await adminService.createAdminAccount({
+      email,
+      password,
+      firstName: resolvedFirstName,
+      lastName: resolvedLastName,
+      role,
+    });
+
+    res.status(201).json({
+      success: true,
+      message: 'Admin account created successfully',
+      data: result,
+    });
+  } catch (error) {
+    if (error.message === 'Admin already exists') {
+      return res.status(409).json({
+        success: false,
+        message: 'Admin already exists',
+        error: error.message,
+      });
+    }
+
+    if (error.message === 'Invalid role' || error.message.includes('required')) {
+      return res.status(400).json({
+        success: false,
+        message: 'Validation error',
+        error: error.message,
+      });
+    }
+
+    console.error('Admin signup error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to create admin account',
+      error: error.message || 'An error occurred during admin signup',
+    });
+  }
+};
+
+/**
  * GET /admin/profile
  * Get admin profile (requires authentication)
  */
 const getProfile = async (req, res) => {
   console.log('-> triggered endpoint GET /admin/profile');
   try {
-    const adminId = req.admin?.adminId;
+    const adminId = req.admin?.id || req.admin?.adminId;
 
     if (!adminId) {
       console.log('-> finished endpoint execution GET /admin/profile');
@@ -236,12 +294,70 @@ const updateEventStatus = async (req, res) => {
   }
 };
 
+/**
+ * PUT /admin/:id/role
+ * Update an admin's role (admin -> faculty, etc.)
+ */
+const updateRole = async (req, res) => {
+  try {
+    if (req.admin?.role !== ADMIN_ROLES.ADMIN) {
+      return res.status(403).json({
+        success: false,
+        message: 'Only admins can modify roles',
+      });
+    }
+
+    const targetId = parseInt(req.params.id, 10);
+    if (Number.isNaN(targetId)) {
+      return res.status(400).json({
+        success: false,
+        message: 'A valid admin ID is required',
+      });
+    }
+
+    const { role } = req.body;
+    const normalizedRole = typeof role === 'string' ? role.trim().toLowerCase() : '';
+    if (!Object.values(ADMIN_ROLES).includes(normalizedRole)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid role',
+        error: `Role must be one of: ${Object.values(ADMIN_ROLES).join(', ')}`,
+      });
+    }
+
+    const updatedAdmin = await adminService.updateAdminRole(targetId, normalizedRole);
+
+    res.status(200).json({
+      success: true,
+      message: 'Admin role updated successfully',
+      data: updatedAdmin,
+    });
+  } catch (error) {
+    if (error.message === 'Admin not found') {
+      return res.status(404).json({
+        success: false,
+        message: 'Admin not found',
+        error: error.message,
+      });
+    }
+
+    console.error('Update admin role error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to update admin role',
+      error: error.message || 'An error occurred while updating admin role',
+    });
+  }
+};
+
 module.exports = {
   login,
+  signup,
   getProfile,
   getStudents,
   getAlumni,
   getEvents,
   updateEventStatus,
+  updateRole,
 };
 

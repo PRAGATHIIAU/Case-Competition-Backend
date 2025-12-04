@@ -1,6 +1,8 @@
 const jwt = require('jsonwebtoken');
+const { ADMIN_ROLES } = require('../models/admin.model');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
+const ALLOWED_ADMIN_ROLES = Object.values(ADMIN_ROLES);
 
 /**
  * Admin Authentication Middleware
@@ -35,8 +37,8 @@ const authenticateAdmin = (req, res, next) => {
     // Verify token
     const decoded = jwt.verify(token, JWT_SECRET);
     
-    // Check if token is for an admin (has adminId)
-    if (!decoded.adminId) {
+    const adminId = decoded.adminId || decoded.id;
+    if (!adminId) {
       return res.status(403).json({
         success: false,
         message: 'Forbidden',
@@ -46,9 +48,10 @@ const authenticateAdmin = (req, res, next) => {
 
     // Attach admin info to request
     req.admin = {
-      adminId: decoded.adminId,
+      adminId,
+      id: adminId,
       email: decoded.email,
-      role: decoded.role,
+      role: decoded.role || ADMIN_ROLES.ADMIN,
     };
 
     next();
@@ -78,7 +81,49 @@ const authenticateAdmin = (req, res, next) => {
   }
 };
 
+const verifyAdmin = (req, res, next) => {
+  if (!req.admin) {
+    return res.status(401).json({
+      success: false,
+      message: 'Authentication required',
+    });
+  }
+
+  const role = (req.admin.role || '').toLowerCase();
+  if (!ALLOWED_ADMIN_ROLES.includes(role)) {
+    return res.status(403).json({
+      success: false,
+      message: 'Forbidden',
+      error: 'Admin role required',
+    });
+  }
+
+  next();
+};
+
+const verifyFaculty = (req, res, next) => {
+  if (!req.admin) {
+    return res.status(401).json({
+      success: false,
+      message: 'Authentication required',
+    });
+  }
+
+  const role = (req.admin.role || '').toLowerCase();
+  if (role !== ADMIN_ROLES.FACULTY) {
+    return res.status(403).json({
+      success: false,
+      message: 'Forbidden',
+      error: 'Faculty role required',
+    });
+  }
+
+  next();
+};
+
 module.exports = {
   authenticateAdmin,
+  verifyAdmin,
+  verifyFaculty,
 };
 

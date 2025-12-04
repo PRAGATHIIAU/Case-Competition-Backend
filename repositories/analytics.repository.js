@@ -1,6 +1,7 @@
 const pool = require('../config/db');
 const { UserModel } = require('../models/user.model');
 const { StudentModel } = require('../models/student.model');
+const { ConnectionRequestModel } = require('../models/connectionRequest.model');
 const eventRepository = require('./event.repository');
 const axios = require('axios');
 const {
@@ -349,6 +350,119 @@ const fetchAlumniEngagement = async () => {
 };
 
 /**
+ * Fetch mentor engagement statistics.
+ *
+ * - totalMentors: number of users willing_to_be_mentor = true
+ * - activeMentors: distinct mentor_ids with accepted connection requests
+ * - inactiveMentors: totalMentors - activeMentors
+ * - pendingRequests: count of pending connection requests
+ * - acceptedRequests: count of accepted connection requests
+ *
+ * @returns {Promise<{totalMentors:number,activeMentors:number,inactiveMentors:number,pendingRequests:number,acceptedRequests:number}>}
+ */
+const fetchMentorEngagement = async () => {
+  const connectionTable = ConnectionRequestModel.TABLE_NAME;
+  const usersTable = UserModel.TABLE_NAME;
+  const ACCEPTED = ConnectionRequestModel.STATUS.ACCEPTED || 'accepted';
+  const PENDING = ConnectionRequestModel.STATUS.PENDING || 'pending';
+  const DECLINED = ConnectionRequestModel.STATUS.DECLINED || 'declined';
+
+  try {
+    // Total mentors based on willingness flag if column exists
+    let totalMentors = 0;
+    try {
+      const columnCheck = await pool.query(
+        `SELECT EXISTS (
+           SELECT 1
+           FROM information_schema.columns
+           WHERE table_name = $1
+             AND column_name = 'willing_to_be_mentor'
+         ) AS exists`,
+        [usersTable]
+      );
+      const hasMentorColumn = !!columnCheck.rows[0]?.exists;
+
+      if (hasMentorColumn) {
+        const totalMentorsResult = await pool.query(
+          `SELECT COUNT(*) AS count
+           FROM ${usersTable}
+           WHERE willing_to_be_mentor = TRUE`
+        );
+        totalMentors = Number(totalMentorsResult.rows[0]?.count || 0);
+      } else {
+        console.warn(
+          'Analytics repository: users.willing_to_be_mentor column missing; totalMentors will default to 0'
+        );
+      }
+    } catch (mentorColumnErr) {
+      console.warn('Analytics repository: unable to compute totalMentors:', mentorColumnErr.message);
+    }
+
+    // Active mentors: distinct mentor IDs with accepted requests
+    let activeMentors = 0;
+    try {
+      const activeMentorResult = await pool.query(
+        `SELECT COUNT(DISTINCT mentor_id) AS count
+         FROM ${connectionTable}
+         WHERE status = $1`,
+        [ACCEPTED]
+      );
+      activeMentors = Number(activeMentorResult.rows[0]?.count || 0);
+    } catch (activeErr) {
+      console.warn('Analytics repository: unable to compute activeMentors:', activeErr.message);
+      activeMentors = 0;
+    }
+
+    // Pending and accepted request counts for context
+    let pendingRequests = 0;
+    let acceptedRequests = 0;
+    let rejectedRequests = 0;
+    try {
+      const [pendingResult, acceptedResult, rejectedResult] = await Promise.all([
+        pool.query(
+          `SELECT COUNT(*) AS count
+           FROM ${connectionTable}
+           WHERE status = $1`,
+          [PENDING]
+        ),
+        pool.query(
+          `SELECT COUNT(*) AS count
+           FROM ${connectionTable}
+           WHERE status = $1`,
+          [ACCEPTED]
+        ),
+        pool.query(
+          `SELECT COUNT(*) AS count
+           FROM ${connectionTable}
+           WHERE status = $1`,
+          [DECLINED]
+        ),
+      ]);
+
+      pendingRequests = Number(pendingResult.rows[0]?.count || 0);
+      acceptedRequests = Number(acceptedResult.rows[0]?.count || 0);
+      rejectedRequests = Number(rejectedResult.rows[0]?.count || 0);
+    } catch (requestErr) {
+      console.warn('Analytics repository: unable to compute mentor request counts:', requestErr.message);
+    }
+
+    const inactiveMentors = totalMentors > 0 ? Math.max(totalMentors - activeMentors, 0) : 0;
+
+    return {
+      totalMentors,
+      activeMentors,
+      inactiveMentors,
+      pendingRequests,
+      acceptedRequests,
+      rejectedRequests,
+    };
+  } catch (error) {
+    console.error('Analytics repository error (fetchMentorEngagement):', error);
+    throw error;
+  }
+};
+
+/**
  * Fetch list of inactive alumni (have not logged in recently).
  *
  * Inactive definition: last_login older than 60 days.
@@ -423,6 +537,7 @@ module.exports = {
   fetchStudentEngagement,
   fetchAlumniEngagement,
   fetchInactiveAlumni,
+  fetchMentorEngagement,
   /**
    * Fetch feedback summary statistics for students & employers.
    *

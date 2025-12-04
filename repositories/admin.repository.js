@@ -49,5 +49,51 @@ const getAdminById = async (id) => {
 module.exports = {
   getAdminByEmail,
   getAdminById,
+  /**
+   * Update admin role
+   * @param {number} id
+   * @param {'admin'|'faculty'} role
+   * @returns {Promise<Object|null>}
+   */
+  updateAdminRole: async (id, role) => {
+    const query = `
+      UPDATE ${AdminModel.TABLE_NAME}
+      SET role = $1,
+          updated_at = CURRENT_TIMESTAMP
+      WHERE id = $2
+      RETURNING id, email, first_name, last_name, role, created_at, updated_at
+    `;
+
+    try {
+      const result = await pool.query(query, [role, id]);
+      return result.rows[0] || null;
+    } catch (error) {
+      throw error;
+    }
+  },
+  /**
+   * Create a new admin/faculty account
+   * @param {Object} adminData
+   * @param {string} adminData.email
+   * @param {string} adminData.passwordHash
+   * @param {string} adminData.firstName
+   * @param {string} adminData.lastName
+   * @param {'admin'|'faculty'} adminData.role
+   * @returns {Promise<Object>}
+   */
+  createAdmin: async ({ email, passwordHash, firstName, lastName, role }) => {
+    const query = `
+      INSERT INTO ${AdminModel.TABLE_NAME} (email, password_hash, first_name, last_name, role)
+      VALUES ($1, $2, $3, $4, $5)
+      RETURNING id, email, first_name, last_name, role, created_at, updated_at
+    `;
+
+    try {
+      const result = await pool.query(query, [email, passwordHash, firstName, lastName, role]);
+      return result.rows[0];
+    } catch (error) {
+      throw error;
+    }
+  },
 };
 

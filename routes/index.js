@@ -6,6 +6,7 @@ const eventRoutes = require('./event.routes');
 const studentRoutes = require('./student.routes');
 const matchingRoutes = require('./matching.routes');
 const adminRoutes = require('./admin.routes');
+const facultyRoutes = require('./faculty.routes');
 const connectionRequestRoutes = require('./connectionRequest.routes');
 
 // Routes
@@ -19,6 +20,7 @@ router.use('/api/events', eventRoutes);
 
 router.use('/api/students', studentRoutes);
 router.use('/admin', adminRoutes);
+router.use('/faculty', facultyRoutes);
 
 // Matching routes
 router.use('/api/matching', matchingRoutes);
