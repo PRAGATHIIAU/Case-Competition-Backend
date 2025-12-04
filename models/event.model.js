@@ -17,7 +17,8 @@
  *     teamId: string,
  *     teamName: string,
  *     members: array of strings (student IDs or email addresses),
- *     slotPreference: number (optional - slot number preference)
+ *     slotPreference: number (optional - slot number preference),
+ *     submissionLink: string (optional - S3 URL of submitted document)
  *   },
  *   rubrics: array of {
  *     rubricId: string,
@@ -70,6 +71,7 @@ const EventModel = {
     TEAM_NAME: 'teamName',
     MEMBERS: 'members',
     SLOT_PREFERENCE: 'slotPreference',
+    SUBMISSION_LINK: 'submissionLink',
   },
 
   // Rubric structure
@@ -139,6 +141,9 @@ const validateEventData = (eventData) => {
       }
       if (team.slotPreference !== undefined && typeof team.slotPreference !== 'number') {
         throw new Error(`Team at index ${index} must have a valid slotPreference (number)`);
+      }
+      if (team.submissionLink !== undefined && (typeof team.submissionLink !== 'string' || !team.submissionLink.trim())) {
+        throw new Error(`Team at index ${index} must have a valid submissionLink (string)`);
       }
     });
   }

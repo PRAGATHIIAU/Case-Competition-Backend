@@ -2,6 +2,9 @@ const eventRepository = require('../repositories/event.repository');
 const { validateEventData } = require('../models/event.model');
 const emailService = require('./email.service');
 const { generateTeamId } = require('../repositories/event.repository');
+const studentRepository = require('../repositories/student.repository');
+const { uploadResumeToS3 } = require('./auth.service');
+const { API_GATEWAY_UPLOAD_URL } = require('../config/aws');
 
 /**
  * Event Service
@@ -705,6 +708,144 @@ const getLeaderboard = async (eventId) => {
   }
 };
 
+/**
+ * Get all events where a student is registered as a team member
+ * @param {string} studentId - Student ID (UUID)
+ * @returns {Promise<Array>} Array of event IDs where the student is registered
+ */
+const getRegisteredEventsForStudent = async (studentId) => {
+  try {
+    if (!studentId || typeof studentId !== 'string' || !studentId.trim()) {
+      throw new Error('Student ID is required and must be a valid string');
+    }
+
+    // Get student to retrieve their email
+    const student = await studentRepository.getStudentById(studentId.trim());
+    if (!student) {
+      throw new Error('Student not found');
+    }
+
+    const studentEmail = student.email;
+    if (!studentEmail) {
+      throw new Error('Student email not found');
+    }
+
+    // Get all events from DynamoDB
+    const allEvents = await eventRepository.getAllEvents();
+    if (!allEvents || allEvents.length === 0) {
+      return [];
+    }
+
+    // Filter events where student's email appears in any team's members array
+    const registeredEvents = [];
+
+    for (const event of allEvents) {
+      const teams = event.teams || [];
+      
+      // Check if student's email is in any team's members array
+      const isRegistered = teams.some(team => {
+        const members = team.members || [];
+        // Check if student email matches any member (case-insensitive comparison)
+        return members.some(member => 
+          member && typeof member === 'string' && 
+          member.trim().toLowerCase() === studentEmail.toLowerCase()
+        );
+      });
+
+      if (isRegistered) {
+        registeredEvents.push({
+          eventId: event.eventId,
+          eventName: event.eventInfo?.name || event.title || 'Untitled Event',
+          eventDescription: event.eventInfo?.description || event.description || null,
+        });
+      }
+    }
+
+    return registeredEvents;
+  } catch (error) {
+    throw error;
+  }
+};
+
+/**
+ * Submit competition document for a team
+ * @param {string} eventId - Event ID
+ * @param {string} teamId - Team ID
+ * @param {Buffer} fileBuffer - File buffer
+ * @param {string} fileName - Original file name
+ * @param {string} mimeType - File MIME type
+ * @returns {Promise<Object>} Updated event object with submission link
+ */
+const submitCompetitionDocument = async (eventId, teamId, fileBuffer, fileName, mimeType) => {
+  try {
+    if (!eventId || typeof eventId !== 'string' || !eventId.trim()) {
+      throw new Error('Event ID is required and must be a valid string');
+    }
+
+    if (!teamId || typeof teamId !== 'string' || !teamId.trim()) {
+      throw new Error('Team ID is required and must be a valid string');
+    }
+
+    if (!fileBuffer || !Buffer.isBuffer(fileBuffer)) {
+      throw new Error('File buffer is required');
+    }
+
+    if (!fileName || typeof fileName !== 'string' || !fileName.trim()) {
+      throw new Error('File name is required');
+    }
+
+    // Get event to validate
+    const event = await eventRepository.getEventById(eventId);
+    if (!event) {
+      throw new Error('Event not found');
+    }
+
+    // Validate team exists in the event
+    const teams = event.teams || [];
+    const teamIndex = teams.findIndex((t) => t.teamId === teamId.trim());
+
+    if (teamIndex === -1) {
+      throw new Error('Team not found in event');
+    }
+
+    // Upload file to S3
+    let submissionUrl;
+    try {
+      submissionUrl = await uploadResumeToS3(fileBuffer, fileName, mimeType);
+      console.log('✅ Submission document uploaded to S3:', submissionUrl);
+    } catch (uploadError) {
+      console.error('Failed to upload submission document:', uploadError);
+      throw new Error(`Failed to upload submission document: ${uploadError.message}`);
+    }
+
+    // Update team with submission link
+    const updatedTeams = [...teams];
+    updatedTeams[teamIndex] = {
+      ...updatedTeams[teamIndex],
+      submissionLink: submissionUrl,
+    };
+
+    // Update event with updated teams array
+    const updatedEvent = await eventRepository.updateEvent(eventId, {
+      teams: updatedTeams,
+    });
+
+    if (!updatedEvent) {
+      throw new Error('Failed to update event with submission link');
+    }
+
+    // Return the updated team info
+    return {
+      eventId: updatedEvent.eventId,
+      teamId: teamId.trim(),
+      submissionLink: submissionUrl,
+      team: updatedTeams[teamIndex],
+    };
+  } catch (error) {
+    throw error;
+  }
+};
+
 module.exports = {
   getAllEvents,
   getCompetitions,
@@ -720,5 +861,7 @@ module.exports = {
   updateTeamDetails,
   submitScores,
   getLeaderboard,
+  getRegisteredEventsForStudent,
+  submitCompetitionDocument,
 };
 
