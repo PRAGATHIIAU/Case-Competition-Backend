@@ -16,6 +16,7 @@ import re
 def extract_text_from_profile(profile: Dict[str, Any], is_student: bool = False) -> str:
     """
     Extract and combine all textual information from a profile into a single text string.
+    Enhanced version that includes all meaningful profile data with field weighting.
     For students: prioritizes mentor_preference, skills, projects, then other fields.
     For mentors: prioritizes skills, projects, then other fields.
     
@@ -24,37 +25,74 @@ def extract_text_from_profile(profile: Dict[str, Any], is_student: bool = False)
         is_student: Boolean indicating if this is a student profile (default: False)
     
     Returns:
-        Combined text string with all relevant profile information
+        Combined text string with all relevant profile information (weighted by importance)
     """
     text_parts = []
     
-    # For students: prioritize mentor_preference first
+    # For students: prioritize mentor_preference first (repeat 3x for higher weight)
     if is_student:
-        # Extract mentor_preference (for students - string)
         if profile.get('mentor_preference'):
             mentor_pref = str(profile['mentor_preference']).strip()
             if mentor_pref:
-                text_parts.append(mentor_pref)
+                # Repeat 3 times to give it higher weight in TF-IDF
+                text_parts.extend([mentor_pref] * 3)
     
-    # Extract skills (array) - high priority for both
+    # Extract skills (array) - high priority (repeat 2x for higher weight)
     if profile.get('skills') and isinstance(profile['skills'], list):
-        skills_text = ' '.join([str(skill) for skill in profile['skills']])
-        text_parts.append(skills_text)
+        skills_text = ' '.join([str(skill).strip() for skill in profile['skills'] if skill])
+        if skills_text:
+            # Repeat 2 times to give skills higher weight
+            text_parts.extend([skills_text] * 2)
     
-    # Extract projects (array of objects) - high priority for both
+    # Extract bio (string) - high priority for context
+    if profile.get('bio'):
+        bio_text = str(profile['bio']).strip()
+        if bio_text:
+            text_parts.append(bio_text)
+    
+    # Extract aspirations (string) - important for matching
+    if profile.get('aspirations'):
+        aspirations_text = str(profile['aspirations']).strip()
+        if aspirations_text:
+            # Repeat 2 times for higher weight
+            text_parts.extend([aspirations_text] * 2)
+    
+    # Extract projects (array of objects) - high priority
     if profile.get('projects') and isinstance(profile['projects'], list):
         for project in profile['projects']:
             if isinstance(project, dict):
-                project_text = ' '.join([str(v) for v in project.values() if isinstance(v, str)])
-                text_parts.append(project_text)
-            elif isinstance(project, str):
-                text_parts.append(project)
+                # Extract all text fields from project
+                project_fields = []
+                for key, value in project.items():
+                    if isinstance(value, str) and value.strip():
+                        project_fields.append(value.strip())
+                    elif isinstance(value, (list, dict)):
+                        # Handle nested structures
+                        project_fields.append(str(value))
+                if project_fields:
+                    project_text = ' '.join(project_fields)
+                    text_parts.append(project_text)
+            elif isinstance(project, str) and project.strip():
+                text_parts.append(project.strip())
     
-    # Extract aspirations (string)
-    if profile.get('aspirations'):
-        text_parts.append(str(profile['aspirations']))
+    # Extract experiences (array of objects) - high priority
+    if profile.get('experiences') and isinstance(profile['experiences'], list):
+        for exp in profile['experiences']:
+            if isinstance(exp, dict):
+                # Extract all text fields from experience
+                exp_fields = []
+                for key, value in exp.items():
+                    if isinstance(value, str) and value.strip():
+                        exp_fields.append(value.strip())
+                    elif isinstance(value, (list, dict)):
+                        exp_fields.append(str(value))
+                if exp_fields:
+                    exp_text = ' '.join(exp_fields)
+                    text_parts.append(exp_text)
+            elif isinstance(exp, str) and exp.strip():
+                text_parts.append(exp.strip())
     
-    # Extract parsed_resume (JSON object)
+    # Extract parsed_resume (JSON object) - very rich source of data
     if profile.get('parsed_resume'):
         parsed_resume = profile['parsed_resume']
         if isinstance(parsed_resume, str):
@@ -64,57 +102,91 @@ def extract_text_from_profile(profile: Dict[str, Any], is_student: bool = False)
                 pass
         
         if isinstance(parsed_resume, dict):
-            # Extract text from common resume fields
-            resume_text_fields = ['summary', 'objective', 'description', 'text', 'content']
+            # Extract text from common resume fields (high priority)
+            resume_text_fields = [
+                'summary', 'objective', 'description', 'text', 'content',
+                'professional_summary', 'executive_summary', 'profile',
+                'about', 'overview', 'background'
+            ]
             for field in resume_text_fields:
                 if field in parsed_resume:
-                    text_parts.append(str(parsed_resume[field]))
+                    field_value = parsed_resume[field]
+                    if isinstance(field_value, str) and field_value.strip():
+                        text_parts.append(field_value.strip())
+                    elif isinstance(field_value, (list, dict)):
+                        text_parts.append(str(field_value))
             
-            # Extract all string values from the resume
-            def extract_dict_values(obj, max_depth=3, current_depth=0):
+            # Extract work experience from parsed resume
+            if 'work_experience' in parsed_resume or 'experience' in parsed_resume:
+                exp_data = parsed_resume.get('work_experience') or parsed_resume.get('experience')
+                if isinstance(exp_data, list):
+                    for exp in exp_data:
+                        if isinstance(exp, dict):
+                            exp_text = ' '.join([str(v) for v in exp.values() if isinstance(v, str) and v.strip()])
+                            if exp_text:
+                                text_parts.append(exp_text)
+            
+            # Extract education from parsed resume
+            if 'education' in parsed_resume:
+                edu_data = parsed_resume['education']
+                if isinstance(edu_data, list):
+                    for edu in edu_data:
+                        if isinstance(edu, dict):
+                            edu_text = ' '.join([str(v) for v in edu.values() if isinstance(v, str) and v.strip()])
+                            if edu_text:
+                                text_parts.append(edu_text)
+            
+            # Extract all string values from the resume (comprehensive extraction)
+            def extract_dict_values(obj, max_depth=5, current_depth=0):
+                """Extract all string values from nested structures"""
                 if current_depth >= max_depth:
                     return []
                 values = []
                 if isinstance(obj, dict):
-                    for value in obj.values():
+                    for key, value in obj.items():
+                        # Skip metadata fields
+                        if key.lower() in ['id', 'url', 'link', 'date', 'timestamp', 'created_at', 'updated_at']:
+                            continue
                         values.extend(extract_dict_values(value, max_depth, current_depth + 1))
                 elif isinstance(obj, list):
                     for item in obj:
                         values.extend(extract_dict_values(item, max_depth, current_depth + 1))
-                elif isinstance(obj, str) and len(obj.strip()) > 0:
+                elif isinstance(obj, str) and len(obj.strip()) > 2:  # Only include meaningful strings
                     values.append(obj.strip())
                 return values
             
-            resume_values = extract_dict_values(parsed_resume)
+            resume_values = extract_dict_values(parsed_resume, max_depth=5)
             text_parts.extend(resume_values)
     
-    # Extract experiences (array of objects)
-    if profile.get('experiences') and isinstance(profile['experiences'], list):
-        for exp in profile['experiences']:
-            if isinstance(exp, dict):
-                exp_text = ' '.join([str(v) for v in exp.values() if isinstance(v, str)])
-                text_parts.append(exp_text)
-            elif isinstance(exp, str):
-                text_parts.append(exp)
-    
-    # Extract achievements (array)
+    # Extract achievements (array) - important for context
     if profile.get('achievements') and isinstance(profile['achievements'], list):
-        achievements_text = ' '.join([str(ach) for ach in profile['achievements']])
-        text_parts.append(achievements_text)
+        achievements_text = ' '.join([str(ach).strip() for ach in profile['achievements'] if ach])
+        if achievements_text:
+            text_parts.append(achievements_text)
     
-    # Extract major (for students)
+    # Extract major (for both students and mentors if available)
     if profile.get('major'):
-        text_parts.append(str(profile['major']))
+        major_text = str(profile['major']).strip()
+        if major_text:
+            # Repeat 2 times for higher weight
+            text_parts.extend([major_text] * 2)
+    
+    # Extract grad_year (for context)
+    if profile.get('grad_year'):
+        grad_year = str(profile['grad_year']).strip()
+        if grad_year:
+            text_parts.append(grad_year)
     
     # Extract relevant_coursework (for students - array)
     if profile.get('relevant_coursework') and isinstance(profile['relevant_coursework'], list):
-        coursework_text = ' '.join([str(course) for course in profile['relevant_coursework']])
-        text_parts.append(coursework_text)
+        coursework_text = ' '.join([str(course).strip() for course in profile['relevant_coursework'] if course])
+        if coursework_text:
+            text_parts.append(coursework_text)
     
     # Combine all text parts
     combined_text = ' '.join(text_parts)
     
-    # Clean up: remove extra whitespace
+    # Clean up: remove extra whitespace and normalize
     combined_text = re.sub(r'\s+', ' ', combined_text).strip()
     
     return combined_text if combined_text else ''
@@ -138,15 +210,18 @@ def vectorize_profiles(profiles: List[Dict[str, Any]], is_students: bool = False
     if all(not text for text in texts):
         texts = ['dummy text'] * len(profiles)
     
-    # Create TF-IDF vectorizer
-    # Using max_features to limit dimensionality and improve performance
+    # Create TF-IDF vectorizer with optimized parameters for better context
+    # Increased max_features for richer context and better matching
     vectorizer = TfidfVectorizer(
-        max_features=5000,  # Limit to top 5000 features
-        ngram_range=(1, 2),  # Use unigrams and bigrams
+        max_features=10000,  # Increased to 10000 for richer context (was 5000)
+        ngram_range=(1, 3),  # Use unigrams, bigrams, and trigrams for better context
         min_df=1,  # Minimum document frequency
+        max_df=0.95,  # Ignore terms that appear in more than 95% of documents
         stop_words='english',  # Remove common English stop words
         lowercase=True,
-        strip_accents='unicode'
+        strip_accents='unicode',
+        sublinear_tf=True,  # Apply sublinear TF scaling (1 + log(tf)) for better performance
+        norm='l2'  # L2 normalization for better similarity computation
     )
     
     # Check if we have any non-empty text
@@ -174,9 +249,10 @@ def vectorize_profiles(profiles: List[Dict[str, Any]], is_students: bool = False
         # Fallback: if vectorization fails, use CountVectorizer
         from sklearn.feature_extraction.text import CountVectorizer
         vectorizer = CountVectorizer(
-            max_features=5000,
-            ngram_range=(1, 2),
+            max_features=10000,  # Increased to match TF-IDF settings
+            ngram_range=(1, 3),  # Use unigrams, bigrams, and trigrams
             min_df=1,
+            max_df=0.95,
             stop_words='english',
             lowercase=True,
             strip_accents='unicode'
@@ -544,14 +620,18 @@ def perform_matching(mentors_data: List[Dict[str, Any]], mentees_data: List[Dict
     if all(not text for text in all_texts):
         all_texts = ['dummy text'] * len(all_texts)
     
-    # Create TF-IDF vectorizer
+    # Create TF-IDF vectorizer with optimized parameters for better context
+    # Increased max_features for richer context and better matching
     vectorizer = TfidfVectorizer(
-        max_features=5000,
-        ngram_range=(1, 2),
-        min_df=1,
-        stop_words='english',
+        max_features=10000,  # Increased to 10000 for richer context (was 5000)
+        ngram_range=(1, 3),  # Use unigrams, bigrams, and trigrams for better context
+        min_df=1,  # Minimum document frequency
+        max_df=0.95,  # Ignore terms that appear in more than 95% of documents
+        stop_words='english',  # Remove common English stop words
         lowercase=True,
-        strip_accents='unicode'
+        strip_accents='unicode',
+        sublinear_tf=True,  # Apply sublinear TF scaling (1 + log(tf)) for better performance
+        norm='l2'  # L2 normalization for better similarity computation
     )
     
     # Check if we have any non-empty text
@@ -574,9 +654,10 @@ def perform_matching(mentors_data: List[Dict[str, Any]], mentees_data: List[Dict
             print(f"Error in TF-IDF vectorization: {e}. Falling back to CountVectorizer.", file=sys.stderr)
             from sklearn.feature_extraction.text import CountVectorizer
             vectorizer = CountVectorizer(
-                max_features=5000,
-                ngram_range=(1, 2),
+                max_features=10000,  # Increased to match TF-IDF settings
+                ngram_range=(1, 3),  # Use unigrams, bigrams, and trigrams
                 min_df=1,
+                max_df=0.95,
                 stop_words='english',
                 lowercase=True,
                 strip_accents='unicode'

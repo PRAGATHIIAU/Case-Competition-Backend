@@ -96,12 +96,16 @@ const getAllMentors = async () => {
           // DynamoDB profile data
           skills: profile?.skills || [],
           aspirations: profile?.aspirations || null,
+          bio: profile?.bio || null,
           parsed_resume: profile?.parsed_resume || null,
           projects: profile?.projects || [],
           experiences: profile?.experiences || [],
           achievements: profile?.achievements || [],
           resume_url: profile?.resume_url || null,
           location: profile?.location || null,
+          major: profile?.major || null,
+          grad_year: profile?.grad_year || null,
+          relevant_coursework: profile?.relevant_coursework || [],
         };
       } else {
         // If Promise.allSettled result is rejected (shouldn't happen with our error handling)
