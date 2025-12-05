@@ -1,0 +1,178 @@
+{
+  "name": "Judge Registration Email Flow",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "alumni_judge_registered",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "id": "webhook-trigger",
+      "name": "Judge Registration Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [250, 300],
+      "webhookId": "alumni-judge-registered"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "backend-url",
+              "name": "backendUrl",
+              "value": "http://localhost:5000",
+              "type": "string"
+            },
+            {
+              "id": "admin-email",
+              "name": "adminEmail",
+              "value": "admin@example.com",
+              "type": "string"
+            },
+            {
+              "id": "admin-panel-url",
+              "name": "adminPanelUrl",
+              "value": "http://localhost:3000/admin",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "set-config",
+      "name": "Set Configuration",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3,
+      "position": [450, 300]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $json.backendUrl }}/api/n8n/judge/{{ $json.judgeId }}",
+        "options": {}
+      },
+      "id": "get-judge-details",
+      "name": "Get Judge Details",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [650, 300]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $json.backendUrl }}/api/n8n/event/{{ $json.eventId }}",
+        "options": {}
+      },
+      "id": "get-event-details",
+      "name": "Get Event Details",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [850, 300]
+    },
+    {
+      "parameters": {
+        "fromEmail": "={{ $json.adminEmail }}",
+        "toEmail": "={{ $json.adminEmail }}",
+        "subject": "New Judge Interest: {{ $json['Get Event Details'].data.name }}",
+        "emailType": "html",
+        "message": "<html>\n<body>\n  <h2>New Judge Interest Notification</h2>\n  <p>An alumni has expressed interest in participating as a judge for an event.</p>\n  \n  <h3>Event Details:</h3>\n  <ul>\n    <li><strong>Event ID:</strong> {{ $json['Get Event Details'].data.eventId }}</li>\n    <li><strong>Event Name:</strong> {{ $json['Get Event Details'].data.name }}</li>\n    <li><strong>Event Date:</strong> {{ $json['Get Event Details'].data.date }}</li>\n    <li><strong>Location:</strong> {{ $json['Get Event Details'].data.location || 'Not specified' }}</li>\n  </ul>\n  \n  <h3>Alumni/Judge Details:</h3>\n  <ul>\n    <li><strong>Name:</strong> {{ $json['Get Judge Details'].data.name }}</li>\n    <li><strong>Email:</strong> {{ $json['Get Judge Details'].data.email }}</li>\n    <li><strong>Contact:</strong> {{ $json['Get Judge Details'].data.contact || 'Not provided' }}</li>\n    <li><strong>Location:</strong> {{ $json['Get Judge Details'].data.location || 'Not provided' }}</li>\n  </ul>\n  \n  <p>Please review and update the judge status in the admin panel.</p>\n  \n  <p><a href=\"{{ $json.adminPanelUrl }}/events/{{ $json.eventId }}/judges\">View Event Judges</a></p>\n</body>\n</html>",
+        "options": {}
+      },
+      "id": "email-admin",
+      "name": "Email Admin",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [1050, 200],
+      "credentials": {
+        "smtp": {
+          "id": "smtp-credentials",
+          "name": "SMTP Account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "fromEmail": "={{ $json.adminEmail }}",
+        "toEmail": "={{ $json['Get Judge Details'].data.email }}",
+        "subject": "Registration Confirmed: {{ $json['Get Event Details'].data.name }}",
+        "emailType": "html",
+        "message": "<html>\n<body>\n  <h2>Registration Confirmed</h2>\n  \n  <p>Dear {{ $json['Get Judge Details'].data.name }},</p>\n  \n  <p>Thank you for your interest in judging <strong>{{ $json['Get Event Details'].data.name }}</strong>.</p>\n  \n  <h3>Event Details:</h3>\n  <ul>\n    <li><strong>Event Name:</strong> {{ $json['Get Event Details'].data.name }}</li>\n    <li><strong>Date:</strong> {{ $json['Get Event Details'].data.date }}</li>\n    <li><strong>Location:</strong> {{ $json['Get Event Details'].data.location || 'To be announced' }}</li>\n  </ul>\n  \n  <p>Your registration has been received and is being reviewed by our team. You will receive a confirmation email once your participation is approved.</p>\n  \n  <p>If you have any questions, please contact us at {{ $json.adminEmail }}.</p>\n  \n  <p>Best regards,<br>Event Management Team</p>\n</body>\n</html>",
+        "options": {}
+      },
+      "id": "email-judge-confirmation",
+      "name": "Email Judge Confirmation",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [1050, 400],
+      "credentials": {
+        "smtp": {
+          "id": "smtp-credentials",
+          "name": "SMTP Account"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Judge Registration Webhook": {
+      "main": [
+        [
+          {
+            "node": "Set Configuration",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Configuration": {
+      "main": [
+        [
+          {
+            "node": "Get Judge Details",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Judge Details": {
+      "main": [
+        [
+          {
+            "node": "Get Event Details",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Event Details": {
+      "main": [
+        [
+          {
+            "node": "Email Admin",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Email Judge Confirmation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 0,
+  "updatedAt": "2024-01-01T00:00:00.000Z",
+  "versionId": "1"
+}
+

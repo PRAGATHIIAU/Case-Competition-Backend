@@ -225,20 +225,23 @@ const registerAlumniAsJudge = async (eventId, registrationData) => {
     // Get event title (support both old and new format)
     const eventTitle = event.eventInfo?.name || event.title || 'Event';
 
-    // Send email notification to admin
-    try {
-      await emailService.sendJudgeInterestNotification({
-        alumniEmail,
-        alumniName: alumniName || 'Alumni',
-        eventId,
-        eventTitle,
-        preferredDateTime,
-        preferredLocation,
-      });
-    } catch (emailError) {
-      // Log email error but don't fail the registration
-      console.error('Failed to send email notification:', emailError);
-      // In production, you might want to queue this for retry
+    // Call n8n webhook for email notification (instead of direct email)
+    const { callN8nWebhook } = require('./n8n.service');
+    const { N8N_WEBHOOK_JUDGE_REGISTERED_URL } = require('../config/aws');
+    
+    if (N8N_WEBHOOK_JUDGE_REGISTERED_URL) {
+      try {
+        await callN8nWebhook(N8N_WEBHOOK_JUDGE_REGISTERED_URL, {
+          judgeId: String(id).trim(),
+          eventId,
+        });
+        console.log('✅ N8N webhook called successfully for judge registration');
+      } catch (webhookError) {
+        // Log webhook error but don't fail the registration
+        console.error('⚠️ Failed to call n8n webhook (registration will still succeed):', webhookError);
+      }
+    } else {
+      console.warn('⚠️ N8N_WEBHOOK_JUDGE_REGISTERED_URL is not configured. Skipping webhook call.');
     }
 
     return {
@@ -846,6 +849,85 @@ const submitCompetitionDocument = async (eventId, teamId, fileBuffer, fileName, 
   }
 };
 
+/**
+ * Update judge status for an event (Admin only)
+ * @param {string} eventId - Event ID
+ * @param {string} judgeId - Judge ID
+ * @param {string} status - New status ("approved" or "denied")
+ * @returns {Promise<Object>} Updated event object
+ */
+const updateJudgeStatus = async (eventId, judgeId, status) => {
+  try {
+    if (!eventId || typeof eventId !== 'string' || !eventId.trim()) {
+      throw new Error('Event ID is required and must be a valid string');
+    }
+
+    if (!judgeId || typeof judgeId !== 'string' || !judgeId.trim()) {
+      throw new Error('Judge ID is required and must be a valid string');
+    }
+
+    if (!status || typeof status !== 'string' || !status.trim()) {
+      throw new Error('Status is required and must be a valid string');
+    }
+
+    const normalizedStatus = status.trim().toLowerCase();
+    if (normalizedStatus !== 'approved' && normalizedStatus !== 'denied') {
+      throw new Error('Status must be either "approved" or "denied"');
+    }
+
+    // Get event
+    const event = await eventRepository.getEventById(eventId);
+    if (!event) {
+      throw new Error('Event not found');
+    }
+
+    // Get existing judges array
+    const existingJudges = event.judges || [];
+    
+    // Find judge index
+    const judgeIndex = existingJudges.findIndex((j) => j.judgeId === judgeId.trim());
+    if (judgeIndex === -1) {
+      throw new Error('Judge not found in event');
+    }
+
+    // Update judge status
+    const updatedJudges = [...existingJudges];
+    updatedJudges[judgeIndex] = {
+      ...updatedJudges[judgeIndex],
+      status: normalizedStatus,
+    };
+
+    // Update event with new judges array
+    const updatedEvent = await eventRepository.updateEvent(eventId, {
+      judges: updatedJudges,
+    });
+
+    // Call n8n webhook for email notification
+    const { callN8nWebhook } = require('./n8n.service');
+    const { N8N_WEBHOOK_JUDGE_STATUS_UPDATE_URL } = require('../config/aws');
+    
+    if (N8N_WEBHOOK_JUDGE_STATUS_UPDATE_URL) {
+      try {
+        await callN8nWebhook(N8N_WEBHOOK_JUDGE_STATUS_UPDATE_URL, {
+          judgeId: judgeId.trim(),
+          eventId,
+          status: normalizedStatus,
+        });
+        console.log('✅ N8N webhook called successfully for judge status update');
+      } catch (webhookError) {
+        // Log webhook error but don't fail the update
+        console.error('⚠️ Failed to call n8n webhook (status update will still succeed):', webhookError);
+      }
+    } else {
+      console.warn('⚠️ N8N_WEBHOOK_JUDGE_STATUS_UPDATE_URL is not configured. Skipping webhook call.');
+    }
+
+    return updatedEvent;
+  } catch (error) {
+    throw error;
+  }
+};
+
 module.exports = {
   getAllEvents,
   getCompetitions,
@@ -863,5 +945,6 @@ module.exports = {
   getLeaderboard,
   getRegisteredEventsForStudent,
   submitCompetitionDocument,
+  updateJudgeStatus,
 };
 

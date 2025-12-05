@@ -1,0 +1,171 @@
+{
+  "name": "Post-Event Thank You Email Flow",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "59 23 * * *"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "cron-trigger",
+      "name": "Daily Thank You Check",
+      "type": "n8n-nodes-base.cron",
+      "typeVersion": 1.2,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "backend-url",
+              "name": "backendUrl",
+              "value": "http://localhost:5000",
+              "type": "string"
+            },
+            {
+              "id": "admin-email",
+              "name": "adminEmail",
+              "value": "admin@example.com",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "set-config",
+      "name": "Set Configuration",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3,
+      "position": [450, 300]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $json.backendUrl }}/api/n8n/events/ended/today",
+        "options": {}
+      },
+      "id": "get-events-ended",
+      "name": "Get Events Ended Today",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [650, 300]
+    },
+    {
+      "parameters": {
+        "batchSize": 1,
+        "options": {}
+      },
+      "id": "split-events",
+      "name": "Split Events",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [850, 300]
+    },
+    {
+      "parameters": {
+        "batchSize": 1,
+        "options": {}
+      },
+      "id": "split-judges",
+      "name": "Split Judges",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [1050, 300]
+    },
+    {
+      "parameters": {
+        "fromEmail": "={{ $json.adminEmail }}",
+        "toEmail": "={{ $json.email }}",
+        "subject": "Thank You for Judging {{ $json.name }}",
+        "emailType": "html",
+        "message": "<html>\n<body>\n  <h2>Thank You for Your Participation!</h2>\n  \n  <p>Dear {{ $json.name }},</p>\n  \n  <p>We would like to extend our sincere gratitude for your participation as a judge for <strong>{{ $json.name }}</strong>.</p>\n  \n  <h3>Event Details:</h3>\n  <ul>\n    <li><strong>Event Name:</strong> {{ $json.name }}</li>\n    <li><strong>Date:</strong> {{ $json.date }}</li>\n    <li><strong>Location:</strong> {{ $json.location || 'N/A' }}</li>\n  </ul>\n  \n  <p>Your expertise and time contributed significantly to the success of this event. We truly appreciate your dedication and professionalism.</p>\n  \n  <p>We hope to work with you again in future events. If you have any feedback or suggestions, please feel free to reach out to us at {{ $json.adminEmail }}.</p>\n  \n  <p>Thank you once again for making this event a success!</p>\n  \n  <p>Best regards,<br>Event Management Team</p>\n</body>\n</html>",
+        "options": {}
+      },
+      "id": "send-thank-you-email",
+      "name": "Send Thank You Email",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [1250, 300],
+      "credentials": {
+        "smtp": {
+          "id": "smtp-credentials",
+          "name": "SMTP Account"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Daily Thank You Check": {
+      "main": [
+        [
+          {
+            "node": "Set Configuration",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Configuration": {
+      "main": [
+        [
+          {
+            "node": "Get Events Ended Today",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Events Ended Today": {
+      "main": [
+        [
+          {
+            "node": "Split Events",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Events": {
+      "main": [
+        [
+          {
+            "node": "Split Judges",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Judges": {
+      "main": [
+        [
+          {
+            "node": "Send Thank You Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 0,
+  "updatedAt": "2024-01-01T00:00:00.000Z",
+  "versionId": "1"
+}
+

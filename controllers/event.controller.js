@@ -682,6 +682,77 @@ const submitCompetitionDocument = async (req, res) => {
   }
 };
 
+/**
+ * PUT /api/events/:eventId/judges/:judgeId/status
+ * Update judge status for an event (Admin only)
+ */
+const updateJudgeStatus = async (req, res) => {
+  console.log(`-> triggered endpoint PUT /api/events/:eventId/judges/:judgeId/status`);
+  try {
+    const { eventId, judgeId } = req.params;
+    const { status } = req.body;
+
+    if (!status || typeof status !== 'string' || !status.trim()) {
+      console.log('-> finished endpoint execution PUT /api/events/:eventId/judges/:judgeId/status');
+      return res.status(400).json({
+        success: false,
+        message: 'Status is required',
+        error: 'Status must be "approved" or "denied"',
+      });
+    }
+
+    const normalizedStatus = status.trim().toLowerCase();
+    if (normalizedStatus !== 'approved' && normalizedStatus !== 'denied') {
+      console.log('-> finished endpoint execution PUT /api/events/:eventId/judges/:judgeId/status');
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid status',
+        error: 'Status must be either "approved" or "denied"',
+      });
+    }
+
+    const updatedEvent = await eventService.updateJudgeStatus(eventId, judgeId, normalizedStatus);
+
+    res.status(200).json({
+      success: true,
+      message: `Judge status updated to ${normalizedStatus} successfully`,
+      data: {
+        eventId: updatedEvent.eventId,
+        judgeId: judgeId.trim(),
+        status: normalizedStatus,
+        updatedAt: updatedEvent.updatedAt,
+      },
+    });
+
+    console.log('-> finished endpoint execution PUT /api/events/:eventId/judges/:judgeId/status');
+  } catch (error) {
+    console.log('-> finished endpoint execution PUT /api/events/:eventId/judges/:judgeId/status');
+    console.error('Update judge status error:', error);
+
+    if (error.message === 'Event not found' || error.message === 'Judge not found in event') {
+      return res.status(404).json({
+        success: false,
+        message: error.message,
+        error: error.message,
+      });
+    }
+
+    if (error.message.includes('required') || error.message.includes('Status must')) {
+      return res.status(400).json({
+        success: false,
+        message: 'Validation error',
+        error: error.message,
+      });
+    }
+
+    res.status(500).json({
+      success: false,
+      message: 'Failed to update judge status',
+      error: error.message || 'An error occurred while updating judge status',
+    });
+  }
+};
+
 module.exports = {
   getAllEvents,
   getCompetitions,
@@ -699,5 +770,6 @@ module.exports = {
   getLeaderboard,
   getRegisteredEventsForStudent,
   submitCompetitionDocument,
+  updateJudgeStatus,
 };
 

@@ -1,0 +1,250 @@
+{
+  "name": "Admin Approval/Denial Email Flow",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "judge_status_update",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "id": "webhook-trigger",
+      "name": "Judge Status Update Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [250, 300],
+      "webhookId": "judge-status-update"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "backend-url",
+              "name": "backendUrl",
+              "value": "http://localhost:5000",
+              "type": "string"
+            },
+            {
+              "id": "admin-email",
+              "name": "adminEmail",
+              "value": "admin@example.com",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "set-config",
+      "name": "Set Configuration",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3,
+      "position": [450, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.status }}",
+              "operation": "equal",
+              "value2": "approved"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "if-status-check",
+      "name": "IF Status Check",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [650, 300]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $json.backendUrl }}/api/n8n/judge/{{ $json.judgeId }}",
+        "options": {}
+      },
+      "id": "get-judge-approved",
+      "name": "Get Judge Details (Approved)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [850, 200]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $json.backendUrl }}/api/n8n/event/{{ $json.eventId }}",
+        "options": {}
+      },
+      "id": "get-event-approved",
+      "name": "Get Event Details (Approved)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1050, 200]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $json.backendUrl }}/api/n8n/judge/{{ $json.judgeId }}",
+        "options": {}
+      },
+      "id": "get-judge-denied",
+      "name": "Get Judge Details (Denied)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [850, 400]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $json.backendUrl }}/api/n8n/event/{{ $json.eventId }}",
+        "options": {}
+      },
+      "id": "get-event-denied",
+      "name": "Get Event Details (Denied)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1050, 400]
+    },
+    {
+      "parameters": {
+        "fromEmail": "={{ $json.adminEmail }}",
+        "toEmail": "={{ $json['Get Judge Details (Approved)'].data.email }}",
+        "subject": "Approved: Judge for {{ $json['Get Event Details (Approved)'].data.name }}",
+        "emailType": "html",
+        "message": "<html>\n<body>\n  <h2>Congratulations! Your Application Has Been Approved</h2>\n  \n  <p>Dear {{ $json['Get Judge Details (Approved)'].data.name }},</p>\n  \n  <p>We are pleased to inform you that your application to judge <strong>{{ $json['Get Event Details (Approved)'].data.name }}</strong> has been approved!</p>\n  \n  <h3>Event Details:</h3>\n  <ul>\n    <li><strong>Event Name:</strong> {{ $json['Get Event Details (Approved)'].data.name }}</li>\n    <li><strong>Date:</strong> {{ $json['Get Event Details (Approved)'].data.date }}</li>\n    <li><strong>Location:</strong> {{ $json['Get Event Details (Approved)'].data.location || 'To be announced' }}</li>\n  </ul>\n  \n  <p>You will receive additional details and instructions closer to the event date.</p>\n  \n  <p>If you have any questions, please contact us at {{ $json.adminEmail }}.</p>\n  \n  <p>Thank you for your participation!</p>\n  \n  <p>Best regards,<br>Event Management Team</p>\n</body>\n</html>",
+        "options": {}
+      },
+      "id": "email-approval",
+      "name": "Send Approval Email",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [1250, 200],
+      "credentials": {
+        "smtp": {
+          "id": "smtp-credentials",
+          "name": "SMTP Account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "fromEmail": "={{ $json.adminEmail }}",
+        "toEmail": "={{ $json['Get Judge Details (Denied)'].data.email }}",
+        "subject": "Update: Judge Application for {{ $json['Get Event Details (Denied)'].data.name }}",
+        "emailType": "html",
+        "message": "<html>\n<body>\n  <h2>Update on Your Judge Application</h2>\n  \n  <p>Dear {{ $json['Get Judge Details (Denied)'].data.name }},</p>\n  \n  <p>Thank you for your interest in judging <strong>{{ $json['Get Event Details (Denied)'].data.name }}</strong>.</p>\n  \n  <p>Unfortunately, we are unable to accommodate your application at this time due to capacity constraints. We appreciate your willingness to contribute and hope you will consider applying for future events.</p>\n  \n  <h3>Event Details:</h3>\n  <ul>\n    <li><strong>Event Name:</strong> {{ $json['Get Event Details (Denied)'].data.name }}</li>\n    <li><strong>Date:</strong> {{ $json['Get Event Details (Denied)'].data.date }}</li>\n  </ul>\n  \n  <p>If you have any questions, please contact us at {{ $json.adminEmail }}.</p>\n  \n  <p>Best regards,<br>Event Management Team</p>\n</body>\n</html>",
+        "options": {}
+      },
+      "id": "email-denial",
+      "name": "Send Denial Email",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [1250, 400],
+      "credentials": {
+        "smtp": {
+          "id": "smtp-credentials",
+          "name": "SMTP Account"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Judge Status Update Webhook": {
+      "main": [
+        [
+          {
+            "node": "Set Configuration",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Configuration": {
+      "main": [
+        [
+          {
+            "node": "IF Status Check",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF Status Check": {
+      "main": [
+        [
+          {
+            "node": "Get Judge Details (Approved)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Get Judge Details (Denied)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Judge Details (Approved)": {
+      "main": [
+        [
+          {
+            "node": "Get Event Details (Approved)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Event Details (Approved)": {
+      "main": [
+        [
+          {
+            "node": "Send Approval Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Judge Details (Denied)": {
+      "main": [
+        [
+          {
+            "node": "Get Event Details (Denied)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Event Details (Denied)": {
+      "main": [
+        [
+          {
+            "node": "Send Denial Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 0,
+  "updatedAt": "2024-01-01T00:00:00.000Z",
+  "versionId": "1"
+}
+

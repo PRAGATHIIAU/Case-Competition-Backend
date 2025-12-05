@@ -8,6 +8,7 @@ const matchingRoutes = require('./matching.routes');
 const adminRoutes = require('./admin.routes');
 const facultyRoutes = require('./faculty.routes');
 const connectionRequestRoutes = require('./connectionRequest.routes');
+const n8nRoutes = require('./n8n.routes');
 
 // Routes
 router.get('/', helloController.getHello);
@@ -27,6 +28,9 @@ router.use('/api/matching', matchingRoutes);
 
 // Connection Request routes
 router.use('/api/connection-requests', connectionRequestRoutes);
+
+// N8N routes (for n8n workflows to fetch data)
+router.use('/api/n8n', n8nRoutes);
 
 module.exports = router;
 

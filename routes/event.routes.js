@@ -61,6 +61,9 @@ router.get('/:eventId/leaderboard', eventController.getLeaderboard);
 // POST /api/events/:eventId/score
 router.post('/:eventId/score', eventController.submitScores);
 
+// PUT /api/events/:eventId/judges/:judgeId/status (Admin only - must come before /:id/register)
+router.put('/:eventId/judges/:judgeId/status', authenticateAdmin, eventController.updateJudgeStatus);
+
 // POST /api/events/:id/register
 router.post('/:id/register', eventController.registerAlumniAsJudge);
 

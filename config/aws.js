@@ -65,6 +65,12 @@ const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'admin@example.com';
 const FROM_EMAIL = process.env.FROM_EMAIL || 'noreply@example.com';
 
 /**
+ * N8N Webhook URLs for workflow automation
+ */
+const N8N_WEBHOOK_JUDGE_REGISTERED_URL = process.env.N8N_WEBHOOK_JUDGE_REGISTERED_URL;
+const N8N_WEBHOOK_JUDGE_STATUS_UPDATE_URL = process.env.N8N_WEBHOOK_JUDGE_STATUS_UPDATE_URL;
+
+/**
  * Allowed file types for resume uploads
  */
 const ALLOWED_FILE_TYPES = [
@@ -89,6 +95,8 @@ module.exports = {
   ALUMNI_PROFILES_TABLE_NAME,
   ADMIN_EMAIL,
   FROM_EMAIL,
+  N8N_WEBHOOK_JUDGE_REGISTERED_URL,
+  N8N_WEBHOOK_JUDGE_STATUS_UPDATE_URL,
   ALLOWED_FILE_TYPES,
   ALLOWED_EXTENSIONS,
 };
